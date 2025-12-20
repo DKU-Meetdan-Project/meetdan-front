@@ -1,7 +1,7 @@
 // 파일 경로: app/store.ts
 
 // 1. 전체 게시글 리스트 (홈 화면에 뜰 데이터)
-export const posts = [
+export let posts = [
   {
     id: '1',
     title: '소프트웨어학과 남자 3명! 술 진탕 마실 분 구함 🍻',
@@ -53,7 +53,7 @@ export const updatePostStatus = (id: string, status: string) => {
       
       // 상태가 ACTIVE가 되면 전체 리스트(posts)에도 추가해서 남들에게 보이게 함
       if (status === 'ACTIVE') {
-          posts.unshift(myTeamState.currentTeam);
+          posts = [myTeamState.currentTeam, ...posts];
           console.log('전체 리스트에 글 등록됨!');
       }
   }
@@ -93,4 +93,4 @@ export const places = [
     phone: '031-123-4567',
     bestMenu: ['🍺 살얼음 생맥주', '🦑 버터구이 오징어', '🍜 치즈 라볶이'],
   },
-];
+]; 
