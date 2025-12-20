@@ -1,7 +1,7 @@
 // 파일 경로: app/write.tsx
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { setMyTeam } from './store'; // ✅ store에서 가져오기
 
 export default function Write() {
@@ -13,11 +13,15 @@ export default function Write() {
   const [age, setAge] = useState('');
   const [count, setCount] = useState(3); // 기본 3명
 
-  const handleSubmit = () => {
+  // 완료 지연 함수
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async() => {
     if (!title || !content || !age) {
       Alert.alert('잠깐!', '내용을 모두 채워주세요.');
       return;
     }
+
 
     // 1. 새로운 팀 객체 생성 (상태는 WAITING)
     const newTeam = {
@@ -36,6 +40,11 @@ export default function Write() {
     // 2. 내 팀으로 설정 (store에 저장)
     setMyTeam(newTeam);
 
+    // 완료 후 로딩 시간 시뮬레이션
+    setIsSubmitting(true);
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    setIsSubmitting(false);
+
     Alert.alert('팀 생성 완료', '친구를 초대하러 이동합니다!');
     
     // 3. ✅ 홈이 아니라, 방금 만든 '내 팀(방 만들기)' 탭으로 이동
@@ -45,13 +54,17 @@ export default function Write() {
   return (
     <View style={styles.container}>
       {/* 헤더 */}
-      <View style={styles.header}>
+      <View style={styles.header} >
         <TouchableOpacity onPress={() => router.back()}>
           <Text style={styles.cancelText}>취소</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>팀 만들기</Text>
-        <TouchableOpacity onPress={handleSubmit}>
-          <Text style={styles.submitText}>완료</Text>
+        <TouchableOpacity onPress={handleSubmit} disabled={isSubmitting}>
+          {isSubmitting ? (
+            <ActivityIndicator color="#3288FF" />
+          ) : (
+            <Text style={styles.submitText}>완료</Text>
+          )}
         </TouchableOpacity>
       </View>
 
