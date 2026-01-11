@@ -136,7 +136,6 @@ export default function MatchPartyLobby() {
   );
 }
 
-// ✅ 공통 스타일 (두 파일 모두 맨 아래에 붙여넣으세요)
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#fff" },
   header: {
