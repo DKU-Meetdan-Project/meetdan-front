@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { posts } from "../store"; // store에서 데이터 가져오기
+import { posts } from "../../store"; // store에서 데이터 가져오기
 
 export default function HomeTab() {
   const router = useRouter();
