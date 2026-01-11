@@ -11,7 +11,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 // store에서 팀 추가 함수 가져오기 (경로 점 하나 '.' 확인!)
-import { addTeam } from "./store";
+import { addTeam } from "../store";
 
 export default function Write() {
   const router = useRouter();

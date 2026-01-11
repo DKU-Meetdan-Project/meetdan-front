@@ -11,7 +11,7 @@ import {
   View,
 } from "react-native";
 // 경로 확인 (store에서 데이터 가져오기)
-import { posts, myTeamState, sendMatchRequest } from "../store";
+import { posts, myTeamState, sendMatchRequest } from "../../store";
 
 export default function PostDetail() {
   const { id } = useLocalSearchParams();
