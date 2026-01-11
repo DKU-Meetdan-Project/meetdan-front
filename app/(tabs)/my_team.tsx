@@ -1,146 +1,291 @@
-// 파일: app/(tabs)/my_team.tsx
-import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { myTeamState, updatePostStatus } from '../store';
+// app/(tabs)/my_team.tsx
+import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useState } from "react";
+import {
+  Alert,
+  FlatList,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  Share,
+} from "react-native";
+// Store 함수들 불러오기
+import { myTeamState, toggleTeamStatus, simulateJoinMember } from "../store";
 
 export default function MyTeamTab() {
   const router = useRouter();
-  const [myTeam, setMyTeam] = useState<any>(null);
+  const [myTeams, setMyTeams] = useState<any[]>([]);
+  const [expandedId, setExpandedId] = useState<number | null>(null); // 어떤 카드를 펼쳤는지
 
-  // 탭이 포커스될 때마다 데이터 새로고침
   useFocusEffect(
     useCallback(() => {
-      // store에 있는 내 팀 정보 가져오기
-      if (myTeamState.currentTeam) {
-        setMyTeam({ ...myTeamState.currentTeam });
-      } else {
-        setMyTeam(null);
-      }
+      setMyTeams([...myTeamState.myTeams]); // 리스트 새로고침
     }, [])
   );
 
-  // 친구 입장 시뮬레이션 (테스트용)
-  const simulateJoin = () => {
-    if (!myTeam) return;
-
-    // 객체 복사 후 멤버 추가
-   const newMember = { name: `친구${(myTeam.members?.length || 0) + 1}`, status: 'READY' };
-    
-    const newTeam = { 
-      ...myTeam, 
-      members: [...(myTeam.members || []), newMember] // 기존 멤버 복사 + 새 멤버 추가
-    };
-    
-    // Store와 State 모두 업데이트
-    myTeamState.currentTeam = newTeam; 
-    setMyTeam(newTeam);
+  // 초대 코드 공유하기
+  const onShareCode = async (code: string) => {
+    await Share.share({
+      message: `[MeetDan] 야, 우리 팀 들어와! 초대코드: ${code}`,
+    });
   };
 
-  const handleRegister = () => {
-    // 🔴 에러 방지용 안전장치 추가
-    if (!myTeam || !myTeam.id) {
-      Alert.alert('오류', '팀 정보를 찾을 수 없습니다.');
-      return;
-    }
+  // 카드 렌더링 함수
+  const renderTeamCard = ({ item }: { item: any }) => {
+    const isFull = item.currentCount === item.count; // 인원 꽉 찼니?
+    const isPublic = item.status === "ACTIVE"; // 공개 중이니?
+    const isExpanded = expandedId === item.id; // 현재 펼쳐진 카드니?
 
-    // 글 상태 ACTIVE로 변경
-    updatePostStatus(myTeam.id, 'ACTIVE');
-    
-    Alert.alert('등록 완료!', '이제 홈 화면에 우리 팀이 보입니다.');
-    router.push('/(tabs)'); // 홈으로 이동
-  };
-
-  // 1. 팀이 없을 때 화면 (방 만들기 버튼)
-  if (!myTeam) {
     return (
-      <View style={styles.emptyContainer}>
-        <Ionicons name="people-outline" size={80} color="#ddd" />
-        <Text style={styles.emptyTitle}>아직 만든 팀이 없어요</Text>
-        <Text style={styles.emptyDesc}>친구들과 함께 과팅을 나가보세요!</Text>
-        
-        <TouchableOpacity style={styles.createButton} onPress={() => router.push('/write')}>
-          <Text style={styles.createButtonText}>+ 과팅 방 만들기</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
+      <TouchableOpacity
+        style={styles.card}
+        activeOpacity={0.9}
+        onPress={() => setExpandedId(isExpanded ? null : item.id)} // 클릭하면 펼치기/접기
+      >
+        {/* 1. 카드 헤더 (항상 보임) */}
+        <View style={styles.cardHeader}>
+          <View style={styles.headerTop}>
+            <Text style={styles.deptText}>{item.dept}</Text>
+            {/* 상태 배지 */}
+            <View
+              style={[
+                styles.badge,
+                isPublic
+                  ? styles.bgBlue
+                  : isFull
+                  ? styles.bgGreen
+                  : styles.bgGray,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.badgeText,
+                  isPublic
+                    ? styles.textWhite
+                    : isFull
+                    ? styles.textWhite
+                    : styles.textGray,
+                ]}
+              >
+                {isPublic ? "🔥 공개중" : isFull ? "✅ 준비완료" : "⏳ 모집중"}
+              </Text>
+            </View>
+          </View>
+          <Text style={styles.title}>{item.title}</Text>
+          <Text style={styles.info}>
+            {item.currentCount} / {item.count}명 참여중 · 평균 {item.age}세
+          </Text>
+        </View>
 
-  // 2. 팀이 있을 때 화면 (대기실 Lobby)
-  const isFull = myTeam.members && myTeam.members.length >= 3;
+        {/* 2. 펼쳐진 디테일 (클릭해야 보임) */}
+        {isExpanded && (
+          <View style={styles.detailSection}>
+            <View style={styles.divider} />
+
+            {/* 초대 코드 영역 */}
+            <View style={styles.codeBox}>
+              <Text style={styles.codeLabel}>초대 코드</Text>
+              <TouchableOpacity
+                style={styles.codeRow}
+                onPress={() => onShareCode(item.inviteCode)}
+              >
+                <Text style={styles.codeText}>{item.inviteCode}</Text>
+                <Ionicons name="copy-outline" size={18} color="#666" />
+              </TouchableOpacity>
+              <Text style={styles.codeDesc}>
+                친구에게 이 코드를 알려주세요!
+              </Text>
+            </View>
+
+            {/* 멤버 리스트 */}
+            <Text style={styles.sectionTitle}>
+              팀원 현황 ({item.currentCount}/{item.count})
+            </Text>
+            {item.members.map((m: any, idx: number) => (
+              <View key={idx} style={styles.memberRow}>
+                <View style={styles.avatar} />
+                <Text style={styles.memberName}>
+                  {m.name} ({m.role})
+                </Text>
+              </View>
+            ))}
+
+            {/* (테스트용) 친구 들어오게 하기 버튼 */}
+            {!isFull && (
+              <TouchableOpacity
+                style={styles.testJoinButton}
+                onPress={() => {
+                  simulateJoinMember(item.id);
+                  setMyTeams([...myTeamState.myTeams]); // 화면 갱신
+                }}
+              >
+                <Text style={styles.testJoinText}>
+                  🧪 (테스트) 친구 입장시키기
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {/* 공개/비공개 버튼 (인원 다 차야 가능!) */}
+            {isFull ? (
+              <TouchableOpacity
+                style={[
+                  styles.actionButton,
+                  isPublic ? styles.bgGray : styles.bgBlue,
+                ]}
+                onPress={() => {
+                  toggleTeamStatus(item.id, !isPublic);
+                  setMyTeams([...myTeamState.myTeams]);
+                }}
+              >
+                <Text
+                  style={[
+                    styles.actionText,
+                    isPublic ? styles.textBlack : styles.textWhite,
+                  ]}
+                >
+                  {isPublic ? "🔒 비공개로 돌리기" : "📢 게시판에 등록하기"}
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.lockedButton}>
+                <Text style={styles.lockedText}>
+                  🔒 인원이 다 모여야 등록할 수 있어요
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
+      </TouchableOpacity>
+    );
+  };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>내 팀 관리</Text>
-        <View style={styles.statusBadge}>
-            <Text style={styles.statusText}>{myTeam.status === 'WAITING' ? '대기중' : '등록됨'}</Text>
-        </View>
+        <Text style={styles.headerTitle}>내 팀 관리 👑</Text>
+        <TouchableOpacity onPress={() => router.push("/write")}>
+          <Text style={styles.createBtn}>+ 방 만들기</Text>
+        </TouchableOpacity>
       </View>
 
-      <View style={styles.card}>
-        <Text style={styles.teamTitle}>{myTeam.title || '제목 없음'}</Text>
-        <Text style={styles.codeLabel}>초대 코드: <Text style={styles.code}>{myTeam.inviteCode || 'NEW-1234'}</Text></Text>
-        
-        <View style={styles.memberList}>
-            {/* 3명 슬롯 그리기 */}
-            {[0, 1, 2].map((i) => {
-                const member = myTeam.members ? myTeam.members[i] : null;
-                return (
-                    <View key={i} style={styles.memberRow}>
-                        <Ionicons 
-                            name={member ? "person" : "add-circle-outline"} 
-                            size={40} 
-                            color={member ? "#3288FF" : "#ccc"} 
-                        />
-                        <Text style={styles.memberName}>{member ? member.name : "친구 대기중..."}</Text>
-                    </View>
-                )
-            })}
+      {myTeams.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>만들어진 방이 없어요.</Text>
         </View>
-      </View>
-
-      {/* 대기중일 때만 보이는 버튼들 */}
-      {myTeam.status === 'WAITING' && (
-        <>
-            <TouchableOpacity style={styles.testBtn} onPress={simulateJoin}>
-                <Text>🛠 (테스트) 친구 입장시키기</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-                style={[styles.registBtn, !isFull && styles.disabledBtn]} 
-                disabled={!isFull}
-                onPress={handleRegister}
-            >
-                <Text style={styles.registBtnText}>{isFull ? "팀 등록하기 (공개)" : "3명이 모여야 등록 가능"}</Text>
-            </TouchableOpacity>
-        </>
+      ) : (
+        <FlatList
+          data={myTeams}
+          renderItem={renderTeamCard}
+          keyExtractor={(item) => item.id.toString()}
+          contentContainerStyle={{ padding: 20 }}
+        />
       )}
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' },
-  emptyTitle: { fontSize: 20, fontWeight: 'bold', marginTop: 20, marginBottom: 10 },
-  emptyDesc: { color: '#888', marginBottom: 30 },
-  createButton: { backgroundColor: '#3288FF', paddingHorizontal: 30, paddingVertical: 15, borderRadius: 30 },
-  createButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  container: { flex: 1, padding: 20, backgroundColor: '#f9f9f9', paddingTop: 60 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  headerTitle: { fontSize: 24, fontWeight: 'bold' },
-  statusBadge: { backgroundColor: '#eee', padding: 5, borderRadius: 5 },
-  statusText: { fontSize: 12, color: '#666' },
-  card: { backgroundColor: '#fff', padding: 20, borderRadius: 15, marginBottom: 20 },
-  teamTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 10 },
-  codeLabel: { color: '#666', marginBottom: 20 },
-  code: { color: '#3288FF', fontWeight: 'bold', fontSize: 18 },
-  memberList: { gap: 15 },
-  memberRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  memberName: { fontSize: 16 },
-  testBtn: { padding: 10, backgroundColor: '#eee', alignItems: 'center', borderRadius: 8, marginBottom: 10 },
-  registBtn: { backgroundColor: '#3288FF', padding: 15, borderRadius: 10, alignItems: 'center' },
-  disabledBtn: { backgroundColor: '#ccc' },
-  registBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 }
+  container: { flex: 1, backgroundColor: "#F5F7FB" },
+  header: {
+    paddingTop: 60,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+    backgroundColor: "#fff",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  headerTitle: { fontSize: 24, fontWeight: "bold" },
+  createBtn: { fontSize: 16, color: "#3288FF", fontWeight: "bold" },
+
+  emptyContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
+  emptyText: { color: "#999", fontSize: 16 },
+
+  // 카드 스타일
+  card: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    marginBottom: 15,
+    padding: 20,
+    elevation: 2,
+  },
+  cardHeader: {},
+  headerTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  deptText: { color: "#888", fontSize: 14 },
+  badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 },
+  badgeText: { fontSize: 11, fontWeight: "bold" },
+  bgBlue: { backgroundColor: "#3288FF" },
+  bgGreen: { backgroundColor: "#4CAF50" },
+  bgGray: { backgroundColor: "#F5F5F5" },
+  textWhite: { color: "#fff" },
+  textGray: { color: "#888" },
+  textBlack: { color: "#333" },
+
+  title: { fontSize: 18, fontWeight: "bold", marginBottom: 5 },
+  info: { fontSize: 14, color: "#555" },
+
+  // 디테일 영역
+  detailSection: { marginTop: 10 },
+  divider: { height: 1, backgroundColor: "#eee", marginVertical: 15 },
+
+  codeBox: {
+    backgroundColor: "#F9FAFB",
+    padding: 15,
+    borderRadius: 8,
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  codeLabel: { fontSize: 12, color: "#888", marginBottom: 5 },
+  codeRow: { flexDirection: "row", alignItems: "center", gap: 5 },
+  codeText: {
+    fontSize: 24,
+    fontWeight: "bold",
+    letterSpacing: 2,
+    color: "#333",
+  },
+  codeDesc: { fontSize: 12, color: "#aaa", marginTop: 5 },
+
+  sectionTitle: { fontSize: 14, fontWeight: "bold", marginBottom: 10 },
+  memberRow: { flexDirection: "row", alignItems: "center", marginBottom: 8 },
+  avatar: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: "#ddd",
+    marginRight: 10,
+  },
+  memberName: { fontSize: 14, color: "#333" },
+
+  // 버튼들
+  testJoinButton: {
+    marginTop: 10,
+    padding: 10,
+    backgroundColor: "#eee",
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  testJoinText: { fontSize: 12, color: "#666" },
+
+  actionButton: {
+    marginTop: 15,
+    padding: 15,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  actionText: { fontWeight: "bold", fontSize: 16 },
+
+  lockedButton: {
+    marginTop: 15,
+    padding: 15,
+    borderRadius: 10,
+    backgroundColor: "#f5f5f5",
+    alignItems: "center",
+  },
+  lockedText: { color: "#999", fontSize: 14 },
 });
