@@ -1,60 +1,77 @@
-// 파일 경로: app/write.tsx
-import { useRouter } from 'expo-router';
-import { useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { setMyTeam } from './store'; // ✅ store에서 가져오기
+import { useRouter } from "expo-router";
+import { useState } from "react";
+import {
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  ActivityIndicator,
+} from "react-native";
+// store에서 팀 추가 함수 가져오기 (경로 점 하나 '.' 확인!)
+import { addTeam } from "../store";
 
 export default function Write() {
   const router = useRouter();
 
-  // 입력 상태 관리
-  const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
-  const [age, setAge] = useState('');
+  // 👇 [핵심] 이 변수 선언들이 없어서 에러가 난 겁니다!
+  const [title, setTitle] = useState("");
+  const [content, setContent] = useState("");
+  const [age, setAge] = useState("");
   const [count, setCount] = useState(3); // 기본 3명
-
-  // 완료 지연 함수
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = async() => {
+  const handleSubmit = async () => {
+    // 1. 유효성 검사 (빈칸 막기)
     if (!title || !content || !age) {
-      Alert.alert('잠깐!', '내용을 모두 채워주세요.');
+      Alert.alert("잠깐!", "제목, 내용, 나이를 모두 입력해주세요.");
       return;
     }
 
-
-    // 1. 새로운 팀 객체 생성 (상태는 WAITING)
-    const newTeam = {
-      id: Date.now().toString(), // 유니크 ID
-      title,
-      content,
-      age: parseInt(age),
-      count,
-      dept: '소프트웨어학과', // 로그인 정보 가정
-      gender: 'M',
-      tags: ['#신규', '#따끈따끈'],
-      timestamp: '방금 전',
-      status: 'WAITING', // 👈 아직 홈에는 안 뜸! 대기 상태
-    };
-
-    // 2. 내 팀으로 설정 (store에 저장)
-    setMyTeam(newTeam);
-
-    // 완료 후 로딩 시간 시뮬레이션
     setIsSubmitting(true);
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    setIsSubmitting(false);
 
-    Alert.alert('팀 생성 완료', '친구를 초대하러 이동합니다!');
-    
-    // 3. ✅ 홈이 아니라, 방금 만든 '내 팀(방 만들기)' 탭으로 이동
-    router.replace('/(tabs)/my_team'); 
+    try {
+      // 2. 저장할 데이터 뭉치기
+      const newTeamPayload = {
+        title: title, // 이제 변수가 있어서 에러 안 남!
+        content: content,
+        age: parseInt(age),
+        count: count,
+        dept: "소프트웨어학과", // (나중에 로그인 정보로 대체)
+        gender: "M", // (나중에 로그인 정보로 대체)
+        tags: ["#신규", "#설렘"],
+        // status는 store에서 자동으로 'RECRUITING'(모집중)으로 설정됨
+      };
+
+      // 3. 스토어에 방 생성 요청
+      addTeam(newTeamPayload);
+
+      // 4. 성공 알림 및 이동
+      Alert.alert(
+        "방 생성 완료! 🏠",
+        "내 팀 관리 탭에서 초대 코드를 확인하세요.",
+        [
+          {
+            text: "확인",
+            // 탭 폴더 안에 my_team이 있으니 경로 주의
+            onPress: () => router.replace("/(tabs)/my_team"),
+          },
+        ]
+      );
+    } catch (error) {
+      Alert.alert("오류", "방 생성 중 문제가 발생했습니다.");
+      console.error(error);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <View style={styles.container}>
       {/* 헤더 */}
-      <View style={styles.header} >
+      <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()}>
           <Text style={styles.cancelText}>취소</Text>
         </TouchableOpacity>
@@ -73,12 +90,20 @@ export default function Write() {
         <Text style={styles.label}>몇 명이서 나가나요?</Text>
         <View style={styles.countContainer}>
           {[2, 3, 4].map((num) => (
-            <TouchableOpacity 
-              key={num} 
-              style={[styles.countButton, count === num && styles.countButtonActive]}
+            <TouchableOpacity
+              key={num}
+              style={[
+                styles.countButton,
+                count === num && styles.countButtonActive,
+              ]}
               onPress={() => setCount(num)}
             >
-              <Text style={[styles.countText, count === num && styles.countTextActive]}>
+              <Text
+                style={[
+                  styles.countText,
+                  count === num && styles.countTextActive,
+                ]}
+              >
                 {num}:{num}
               </Text>
             </TouchableOpacity>
@@ -86,7 +111,7 @@ export default function Write() {
         </View>
 
         {/* 평균 나이 */}
-     <Text style={styles.label}>내 나이는?</Text> 
+        <Text style={styles.label}>평균 나이는?</Text>
         <TextInput
           style={styles.input}
           placeholder="예: 23"
@@ -96,6 +121,7 @@ export default function Write() {
           onChangeText={setAge}
           maxLength={2}
         />
+
         {/* 제목 */}
         <Text style={styles.label}>제목 (임팩트 있게!)</Text>
         <TextInput
@@ -122,83 +148,56 @@ export default function Write() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
+  container: { flex: 1, backgroundColor: "#fff" },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingTop: 60,
     paddingBottom: 15,
     paddingHorizontal: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: "#eee",
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  cancelText: {
-    fontSize: 16,
-    color: '#666',
-  },
-  submitText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#3288FF',
-  },
-  formContainer: {
-    padding: 20,
-  },
+  headerTitle: { fontSize: 18, fontWeight: "bold" },
+  cancelText: { fontSize: 16, color: "#666" },
+  submitText: { fontSize: 16, fontWeight: "bold", color: "#3288FF" },
+  formContainer: { padding: 20 },
   label: {
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginBottom: 10,
     marginTop: 20,
-    color: '#333',
+    color: "#333",
   },
   input: {
     borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
+    borderBottomColor: "#ddd",
     paddingVertical: 10,
     fontSize: 16,
-    color: '#000',
+    color: "#000",
   },
   textArea: {
     height: 150,
-    textAlignVertical: 'top', 
+    textAlignVertical: "top",
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: "#ddd",
     borderRadius: 8,
     padding: 10,
     marginTop: 5,
-    borderBottomWidth: 1, 
+    borderBottomWidth: 1,
   },
-  countContainer: {
-    flexDirection: 'row',
-    gap: 10,
-  },
+  countContainer: { flexDirection: "row", gap: 10 },
   countButton: {
     flex: 1,
     paddingVertical: 12,
     borderRadius: 8,
-    backgroundColor: '#f5f5f5',
-    alignItems: 'center',
+    backgroundColor: "#f5f5f5",
+    alignItems: "center",
     borderWidth: 1,
-    borderColor: 'transparent',
+    borderColor: "transparent",
   },
-  countButtonActive: {
-    backgroundColor: '#E8F3FF',
-    borderColor: '#3288FF',
-  },
-  countText: {
-    fontSize: 16,
-    color: '#888',
-    fontWeight: 'bold',
-  },
-  countTextActive: {
-    color: '#3288FF',
-  },
+  countButtonActive: { backgroundColor: "#E8F3FF", borderColor: "#3288FF" },
+  countText: { fontSize: 16, color: "#888", fontWeight: "bold" },
+  countTextActive: { color: "#3288FF" },
 });

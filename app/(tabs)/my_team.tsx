@@ -1,146 +1,518 @@
-// 파일: app/(tabs)/my_team.tsx
-import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { myTeamState, updatePostStatus } from '../store';
+import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useState } from "react";
+import {
+  Alert,
+  FlatList,
+  Modal,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  TextInput,
+} from "react-native";
+
+// ✅ [핵심] 여기에 joinTeamByCode가 포함되어 있어야 에러가 안 납니다!
+import {
+  myTeamState,
+  toggleTeamStatus,
+  simulateJoinMember,
+  deleteTeam,
+  joinTeamByCode,
+} from "../../store";
 
 export default function MyTeamTab() {
   const router = useRouter();
-  const [myTeam, setMyTeam] = useState<any>(null);
 
-  // 탭이 포커스될 때마다 데이터 새로고침
+  // 상태 관리
+  const [myTeams, setMyTeams] = useState<any[]>([]);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+
+  // 신청 내역 모달 상태
+  const [historyVisible, setHistoryVisible] = useState(false);
+  const [sentRequests, setSentRequests] = useState<any[]>([]);
+
+  // 초대 코드 입력 모달 상태
+  const [joinModalVisible, setJoinModalVisible] = useState(false);
+  const [inputCode, setInputCode] = useState("");
+
+  // 화면 포커스 될 때마다 데이터 갱신
   useFocusEffect(
     useCallback(() => {
-      // store에 있는 내 팀 정보 가져오기
-      if (myTeamState.currentTeam) {
-        setMyTeam({ ...myTeamState.currentTeam });
-      } else {
-        setMyTeam(null);
-      }
+      setMyTeams([...myTeamState.myTeams]);
+      setSentRequests([...myTeamState.sentRequests]);
     }, [])
   );
 
-  // 친구 입장 시뮬레이션 (테스트용)
-  const simulateJoin = () => {
-    if (!myTeam) return;
-
-    // 객체 복사 후 멤버 추가
-   const newMember = { name: `친구${(myTeam.members?.length || 0) + 1}`, status: 'READY' };
-    
-    const newTeam = { 
-      ...myTeam, 
-      members: [...(myTeam.members || []), newMember] // 기존 멤버 복사 + 새 멤버 추가
-    };
-    
-    // Store와 State 모두 업데이트
-    myTeamState.currentTeam = newTeam; 
-    setMyTeam(newTeam);
+  // 팀 삭제 핸들러
+  const handleDelete = (id: number) => {
+    Alert.alert(
+      "팀 삭제 🗑️",
+      "정말 이 팀을 삭제하시겠습니까?\n(되돌릴 수 없습니다)",
+      [
+        { text: "취소", style: "cancel" },
+        {
+          text: "삭제",
+          style: "destructive",
+          onPress: () => {
+            deleteTeam(id);
+            setMyTeams([...myTeamState.myTeams]); // 화면 갱신
+          },
+        },
+      ]
+    );
   };
 
-  const handleRegister = () => {
-    // 🔴 에러 방지용 안전장치 추가
-    if (!myTeam || !myTeam.id) {
-      Alert.alert('오류', '팀 정보를 찾을 수 없습니다.');
+  // ✅ 초대 코드로 팀 참가 핸들러
+  const handleJoinTeam = () => {
+    if (inputCode.length < 1) {
+      Alert.alert("잠깐!", "초대 코드를 입력해주세요.");
       return;
     }
 
-    // 글 상태 ACTIVE로 변경
-    updatePostStatus(myTeam.id, 'ACTIVE');
-    
-    Alert.alert('등록 완료!', '이제 홈 화면에 우리 팀이 보입니다.');
-    router.push('/(tabs)'); // 홈으로 이동
+    const success = joinTeamByCode(inputCode);
+    if (success) {
+      setJoinModalVisible(false); // 모달 닫기
+      setInputCode(""); // 입력창 초기화
+      setMyTeams([...myTeamState.myTeams]); // 리스트 갱신
+      Alert.alert("참가 완료! 🤝", `친구 팀(${inputCode})에 합류했습니다.`);
+    } else {
+      Alert.alert("오류", "코드가 올바르지 않거나 이미 가입된 팀입니다.");
+    }
   };
 
-  // 1. 팀이 없을 때 화면 (방 만들기 버튼)
-  if (!myTeam) {
-    return (
-      <View style={styles.emptyContainer}>
-        <Ionicons name="people-outline" size={80} color="#ddd" />
-        <Text style={styles.emptyTitle}>아직 만든 팀이 없어요</Text>
-        <Text style={styles.emptyDesc}>친구들과 함께 과팅을 나가보세요!</Text>
-        
-        <TouchableOpacity style={styles.createButton} onPress={() => router.push('/write')}>
-          <Text style={styles.createButtonText}>+ 과팅 방 만들기</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
+  // 팀 카드 렌더링
+  const renderTeamCard = ({ item }: { item: any }) => {
+    const isFull = item.currentCount >= item.count;
+    const isPublic = item.status === "ACTIVE";
+    const isExpanded = expandedId === item.id;
 
-  // 2. 팀이 있을 때 화면 (대기실 Lobby)
-  const isFull = myTeam.members && myTeam.members.length >= 3;
+    return (
+      <TouchableOpacity
+        style={styles.card}
+        activeOpacity={0.9}
+        onPress={() => setExpandedId(isExpanded ? null : item.id)}
+      >
+        {/* 헤더 부분 */}
+        <View style={styles.cardHeader}>
+          <View style={styles.headerTop}>
+            <Text style={styles.deptText}>{item.dept}</Text>
+            <View
+              style={[
+                styles.badge,
+                isPublic
+                  ? styles.bgBlue
+                  : isFull
+                  ? styles.bgGreen
+                  : styles.bgGray,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.badgeText,
+                  isPublic
+                    ? styles.textWhite
+                    : isFull
+                    ? styles.textWhite
+                    : styles.textGray,
+                ]}
+              >
+                {isPublic ? "🔥 공개중" : isFull ? "✅ 준비완료" : "⏳ 모집중"}
+              </Text>
+            </View>
+          </View>
+          <Text style={styles.title}>{item.title}</Text>
+          <Text style={styles.info}>
+            {item.currentCount}/{item.count}명 · {item.age}세
+          </Text>
+        </View>
+
+        {/* 펼쳐진 디테일 */}
+        {isExpanded && (
+          <View style={styles.detailSection}>
+            <View style={styles.divider} />
+
+            {/* 관리 버튼 (수정/삭제) */}
+            <View style={styles.manageRow}>
+              <TouchableOpacity
+                style={styles.manageBtn}
+                onPress={() => router.push(`/edit/${item.id}`)}
+              >
+                <Ionicons name="pencil" size={16} color="#666" />
+                <Text style={styles.manageText}>정보 수정</Text>
+              </TouchableOpacity>
+
+              <View style={styles.verticalLine} />
+
+              <TouchableOpacity
+                style={styles.manageBtn}
+                onPress={() => handleDelete(item.id)}
+              >
+                <Ionicons name="trash" size={16} color="#FF5252" />
+                <Text style={[styles.manageText, { color: "#FF5252" }]}>
+                  팀 삭제
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.divider} />
+
+            <Text style={styles.sectionTitle}>
+              초대 코드: {item.inviteCode || "없음"}
+            </Text>
+
+            {isFull ? (
+              <TouchableOpacity
+                style={[
+                  styles.actionButton,
+                  isPublic ? styles.bgGray : styles.bgBlue,
+                ]}
+                onPress={() => {
+                  toggleTeamStatus(item.id, !isPublic);
+                  setMyTeams([...myTeamState.myTeams]);
+                }}
+              >
+                <Text
+                  style={[
+                    styles.actionText,
+                    isPublic ? styles.textBlack : styles.textWhite,
+                  ]}
+                >
+                  {isPublic ? "🔒 비공개로 돌리기" : "📢 게시판에 등록하기"}
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <Text style={styles.lockedText}>
+                🔒 친구가 다 모여야 공개할 수 있어요
+              </Text>
+            )}
+
+            {/* 테스트용 버튼 */}
+            {!isFull && (
+              <TouchableOpacity
+                onPress={() => {
+                  simulateJoinMember(item.id);
+                  setMyTeams([...myTeamState.myTeams]);
+                }}
+                style={{ marginTop: 10 }}
+              >
+                <Text style={{ color: "blue", textAlign: "center" }}>
+                  🧪 (테스트) 친구 입장시키기
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+      </TouchableOpacity>
+    );
+  };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <View style={styles.container}>
+      {/* 헤더 */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>내 팀 관리</Text>
-        <View style={styles.statusBadge}>
-            <Text style={styles.statusText}>{myTeam.status === 'WAITING' ? '대기중' : '등록됨'}</Text>
-        </View>
+        <Text style={styles.headerTitle}>내 팀 관리 👑</Text>
+        <TouchableOpacity onPress={() => setHistoryVisible(true)}>
+          <Ionicons name="paper-plane-outline" size={24} color="#333" />
+        </TouchableOpacity>
       </View>
 
-      <View style={styles.card}>
-        <Text style={styles.teamTitle}>{myTeam.title || '제목 없음'}</Text>
-        <Text style={styles.codeLabel}>초대 코드: <Text style={styles.code}>{myTeam.inviteCode || 'NEW-1234'}</Text></Text>
-        
-        <View style={styles.memberList}>
-            {/* 3명 슬롯 그리기 */}
-            {[0, 1, 2].map((i) => {
-                const member = myTeam.members ? myTeam.members[i] : null;
-                return (
-                    <View key={i} style={styles.memberRow}>
-                        <Ionicons 
-                            name={member ? "person" : "add-circle-outline"} 
-                            size={40} 
-                            color={member ? "#3288FF" : "#ccc"} 
-                        />
-                        <Text style={styles.memberName}>{member ? member.name : "친구 대기중..."}</Text>
-                    </View>
-                )
-            })}
-        </View>
+      {/* 상단 배너 (버튼 2개) */}
+      <View style={styles.bannerContainer}>
+        {/* (1) 초대코드 입력 버튼 */}
+        <TouchableOpacity
+          style={[styles.bannerBtn, styles.bannerBtnGray]}
+          onPress={() => setJoinModalVisible(true)}
+        >
+          <Ionicons name="ticket-outline" size={20} color="#666" />
+          <Text style={styles.bannerTextGray}>코드 입력</Text>
+        </TouchableOpacity>
+
+        {/* (2) 방 만들기 버튼 */}
+        <TouchableOpacity
+          style={[styles.bannerBtn, styles.bannerBtnBlue]}
+          onPress={() => router.push("/write")}
+        >
+          <Ionicons name="add" size={20} color="#3288FF" />
+          <Text style={styles.bannerTextBlue}>방 만들기</Text>
+        </TouchableOpacity>
       </View>
 
-      {/* 대기중일 때만 보이는 버튼들 */}
-      {myTeam.status === 'WAITING' && (
-        <>
-            <TouchableOpacity style={styles.testBtn} onPress={simulateJoin}>
-                <Text>🛠 (테스트) 친구 입장시키기</Text>
-            </TouchableOpacity>
+      {/* 팀 리스트 */}
+      <FlatList
+        data={myTeams}
+        renderItem={renderTeamCard}
+        keyExtractor={(item) => item.id.toString()}
+        contentContainerStyle={{ padding: 20 }}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>아직 만든 팀이 없어요!</Text>
+          </View>
+        }
+      />
 
-            <TouchableOpacity 
-                style={[styles.registBtn, !isFull && styles.disabledBtn]} 
-                disabled={!isFull}
-                onPress={handleRegister}
-            >
-                <Text style={styles.registBtnText}>{isFull ? "팀 등록하기 (공개)" : "3명이 모여야 등록 가능"}</Text>
+      {/* 🌟 [모달 1] 보낸 신청 내역 */}
+      <Modal
+        visible={historyVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>📤 보낸 신청 내역</Text>
+            <TouchableOpacity onPress={() => setHistoryVisible(false)}>
+              <Text style={styles.closeText}>닫기</Text>
             </TouchableOpacity>
-        </>
-      )}
-    </ScrollView>
+          </View>
+
+          {sentRequests.length === 0 ? (
+            <View style={styles.emptyHistory}>
+              <Text style={{ color: "#999" }}>아직 보낸 신청이 없습니다.</Text>
+            </View>
+          ) : (
+            <FlatList
+              data={sentRequests}
+              keyExtractor={(item) => item.id.toString()}
+              contentContainerStyle={{ padding: 20 }}
+              renderItem={({ item }) => (
+                <View style={styles.historyCard}>
+                  <View style={styles.historyRow}>
+                    <Text style={styles.historyTarget}>
+                      {item.targetDept} 팀에게
+                    </Text>
+                    <Text style={styles.historyDate}>{item.sentAt}</Text>
+                  </View>
+                  <Text style={styles.historyMyTeam}>
+                    보낸 팀: {item.myTeamTitle}
+                  </Text>
+                  <Text style={styles.historyStatus}>⏳ 수락 대기중...</Text>
+                </View>
+              )}
+            />
+          )}
+        </View>
+      </Modal>
+
+      {/* 🌟 [모달 2] 초대코드 입력 */}
+      <Modal
+        visible={joinModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setJoinModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.joinCard}>
+            <Text style={styles.joinTitle}>🎫 초대 코드 입력</Text>
+            <Text style={styles.joinDesc}>
+              친구에게 받은 코드를 입력하세요.
+            </Text>
+
+            <TextInput
+              style={styles.codeInput}
+              placeholder="예: X7A9Z2"
+              value={inputCode}
+              onChangeText={setInputCode}
+              autoCapitalize="characters"
+              maxLength={6}
+            />
+
+            <View style={styles.joinBtnRow}>
+              <TouchableOpacity
+                style={styles.joinBtnCancel}
+                onPress={() => setJoinModalVisible(false)}
+              >
+                <Text style={styles.joinBtnTextGray}>취소</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.joinBtnConfirm}
+                onPress={handleJoinTeam}
+              >
+                <Text style={styles.joinBtnTextWhite}>입장하기</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' },
-  emptyTitle: { fontSize: 20, fontWeight: 'bold', marginTop: 20, marginBottom: 10 },
-  emptyDesc: { color: '#888', marginBottom: 30 },
-  createButton: { backgroundColor: '#3288FF', paddingHorizontal: 30, paddingVertical: 15, borderRadius: 30 },
-  createButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  container: { flex: 1, padding: 20, backgroundColor: '#f9f9f9', paddingTop: 60 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  headerTitle: { fontSize: 24, fontWeight: 'bold' },
-  statusBadge: { backgroundColor: '#eee', padding: 5, borderRadius: 5 },
-  statusText: { fontSize: 12, color: '#666' },
-  card: { backgroundColor: '#fff', padding: 20, borderRadius: 15, marginBottom: 20 },
-  teamTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 10 },
-  codeLabel: { color: '#666', marginBottom: 20 },
-  code: { color: '#3288FF', fontWeight: 'bold', fontSize: 18 },
-  memberList: { gap: 15 },
-  memberRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  memberName: { fontSize: 16 },
-  testBtn: { padding: 10, backgroundColor: '#eee', alignItems: 'center', borderRadius: 8, marginBottom: 10 },
-  registBtn: { backgroundColor: '#3288FF', padding: 15, borderRadius: 10, alignItems: 'center' },
-  disabledBtn: { backgroundColor: '#ccc' },
-  registBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 }
+  container: { flex: 1, backgroundColor: "#F5F7FB" },
+  header: {
+    paddingTop: 60,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+    backgroundColor: "#fff",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  headerTitle: { fontSize: 24, fontWeight: "bold" },
+
+  // 상단 배너 스타일
+  bannerContainer: {
+    flexDirection: "row",
+    paddingHorizontal: 20,
+    gap: 10,
+    marginTop: 15,
+  },
+  bannerBtn: {
+    flex: 1,
+    padding: 15,
+    borderRadius: 12,
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 5,
+  },
+  bannerBtnBlue: {
+    backgroundColor: "#E8F3FF",
+    borderWidth: 1,
+    borderColor: "#3288FF",
+    borderStyle: "dashed",
+  },
+  bannerBtnGray: {
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#ddd",
+  },
+  bannerTextBlue: { color: "#3288FF", fontWeight: "bold" },
+  bannerTextGray: { color: "#666", fontWeight: "bold" },
+
+  // 팀 카드 스타일
+  card: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    marginBottom: 15,
+    padding: 20,
+    elevation: 2,
+  },
+  cardHeader: {},
+  headerTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  deptText: { color: "#888", fontSize: 14 },
+  badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 },
+  badgeText: { fontSize: 11, fontWeight: "bold" },
+  bgBlue: { backgroundColor: "#3288FF" },
+  bgGreen: { backgroundColor: "#4CAF50" },
+  bgGray: { backgroundColor: "#F5F5F5" },
+  textWhite: { color: "#fff" },
+  textGray: { color: "#888" },
+  textBlack: { color: "#333" },
+  title: { fontSize: 18, fontWeight: "bold", marginBottom: 5 },
+  info: { fontSize: 14, color: "#555" },
+
+  // 디테일 섹션
+  detailSection: { marginTop: 10 },
+  divider: { height: 1, backgroundColor: "#eee", marginVertical: 15 },
+  manageRow: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    alignItems: "center",
+  },
+  manageBtn: { flexDirection: "row", alignItems: "center", gap: 5, padding: 5 },
+  manageText: { fontSize: 14, color: "#666", fontWeight: "bold" },
+  verticalLine: { width: 1, height: 20, backgroundColor: "#eee" },
+
+  actionButton: {
+    marginTop: 15,
+    padding: 15,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  actionText: { fontWeight: "bold", fontSize: 16 },
+  lockedText: {
+    color: "#999",
+    fontSize: 13,
+    textAlign: "center",
+    marginTop: 10,
+  },
+  sectionTitle: { fontSize: 14, fontWeight: "bold", marginTop: 10 },
+
+  emptyContainer: { alignItems: "center", marginTop: 50 },
+  emptyText: { color: "#999" },
+
+  // 모달 1: 신청 내역
+  modalContainer: { flex: 1, backgroundColor: "#F5F7FB" },
+  modalHeader: {
+    padding: 20,
+    paddingTop: 60,
+    backgroundColor: "#fff",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  modalTitle: { fontSize: 18, fontWeight: "bold" },
+  closeText: { fontSize: 16, color: "#3288FF" },
+  emptyHistory: { flex: 1, justifyContent: "center", alignItems: "center" },
+  historyCard: {
+    backgroundColor: "#fff",
+    padding: 15,
+    borderRadius: 12,
+    marginBottom: 10,
+  },
+  historyRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 5,
+  },
+  historyTarget: { fontSize: 16, fontWeight: "bold", color: "#333" },
+  historyDate: { fontSize: 12, color: "#aaa" },
+  historyMyTeam: { fontSize: 14, color: "#666" },
+  historyStatus: {
+    fontSize: 14,
+    color: "#3288FF",
+    fontWeight: "bold",
+    marginTop: 5,
+  },
+
+  // 모달 2: 초대코드 입력
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  joinCard: {
+    width: "80%",
+    backgroundColor: "#fff",
+    padding: 25,
+    borderRadius: 20,
+    alignItems: "center",
+    elevation: 5,
+  },
+  joinTitle: { fontSize: 20, fontWeight: "bold", marginBottom: 5 },
+  joinDesc: { fontSize: 14, color: "#888", marginBottom: 20 },
+  codeInput: {
+    width: "100%",
+    backgroundColor: "#F5F7FB",
+    padding: 15,
+    borderRadius: 10,
+    textAlign: "center",
+    fontSize: 18,
+    fontWeight: "bold",
+    letterSpacing: 2,
+    marginBottom: 20,
+  },
+  joinBtnRow: { flexDirection: "row", gap: 10, width: "100%" },
+  joinBtnCancel: {
+    flex: 1,
+    padding: 15,
+    backgroundColor: "#f0f0f0",
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  joinBtnConfirm: {
+    flex: 1,
+    padding: 15,
+    backgroundColor: "#3288FF",
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  joinBtnTextGray: { color: "#666", fontWeight: "bold" },
+  joinBtnTextWhite: { color: "#fff", fontWeight: "bold" },
 });

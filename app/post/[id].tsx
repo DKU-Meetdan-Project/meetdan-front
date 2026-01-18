@@ -1,140 +1,231 @@
-// 파일 경로: app/post/[id].tsx
-import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+// app/post/[id].tsx
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useState } from "react";
+import {
+  Alert,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+// 경로 확인 (store에서 데이터 가져오기)
+import { posts, myTeamState, sendMatchRequest } from "../../store";
 
 export default function PostDetail() {
+  const { id } = useLocalSearchParams();
   const router = useRouter();
-  const { id } = useLocalSearchParams(); 
 
-  const postData = {
-    id: '1',
-    title: '소프트웨어학과 남자 3명! 술 진탕 마실 분 구함 🍻',
-    content: '안녕하세요! 저희는 소프트웨어학과 20학번 동기들입니다.\n\n다들 성격 둥글둥글하고 술자리 분위기 잘 띄웁니다. 너무 시끄러운 건 싫고 적당히 대화하면서 마시고 싶어요.\n\n안주는 저희가 맛있는 곳 압니다. 몸만 오세요! 😎',
-    dept: '소프트웨어학과',
-    age: 23,
-    count: 3,
-    gender: 'M', 
-    tags: ['#술잘마심', '#유머감각', '#칼답', '#키180이상'],
+  // 1. URL로 넘어온 id로 상대방 팀 정보 찾기
+  const targetPost = posts.find((p) => p.id.toString() === id);
+
+  // 2. 내 팀 선택 모달 상태
+  const [modalVisible, setModalVisible] = useState(false);
+
+  if (!targetPost) {
+    return (
+      <View style={styles.center}>
+        <Text>삭제된 게시글입니다.</Text>
+      </View>
+    );
+  }
+
+  // 3. 신청 버튼 눌렀을 때 로직
+  const handlePressRequest = () => {
+    // 내 팀이 하나도 없으면?
+    if (myTeamState.myTeams.length === 0) {
+      Alert.alert("팀이 없어요!", "먼저 [내 팀] 탭에서 팀을 만들어주세요.");
+      return;
+    }
+    // 팀이 있으면 모달 열어서 선택하게 함
+    setModalVisible(true);
   };
 
-  const isMale = postData.gender === 'M';
-  const pointColor = isMale ? '#3288FF' : '#FF6B6B';
+  // 4. 진짜 전송 (내 팀 선택 완료)
+  const confirmRequest = (myTeam: any) => {
+    setModalVisible(false); // 모달 닫기
+
+    // 인원수 체크 (예: 3:3 미팅인데 2명 팀으로 신청하면?)
+    if (myTeam.count !== targetPost.count) {
+      Alert.alert(
+        "인원수 불일치",
+        `상대방은 ${targetPost.count}명을 원해요! (우리팀: ${myTeam.count}명)`
+      );
+      return;
+    }
+
+    // 스토어 함수 호출
+    const success = sendMatchRequest(myTeam.id, targetPost.id);
+
+    if (success) {
+      Alert.alert("신청 완료! 💌", "상대방이 수락하면 채팅방이 열립니다.", [
+        { text: "확인", onPress: () => router.back() },
+      ]);
+    }
+  };
 
   return (
     <View style={styles.container}>
-      {/* 헤더 */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="chevron-back" size={24} color="#333" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>팀 상세정보</Text>
-        <View style={{ width: 24 }} /> 
-      </View>
-
+      {/* --- 게시글 내용 --- */}
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* 상단 요약 카드 */}
-        <View style={styles.summaryCard}>
-          <View style={styles.badgeRow}>
-            <View style={styles.deptBadge}>
-              <Text style={styles.deptText}>{postData.dept}</Text>
-            </View>
-            <Text style={styles.dateText}>방금 전</Text>
-          </View>
-          <Text style={styles.title}>{postData.title}</Text>
-          
-          <View style={styles.infoGrid}>
-            <View style={styles.infoItem}>
-              <Text style={styles.infoLabel}>인원</Text>
-              <Text style={[styles.infoValue, { color: pointColor }]}>{postData.count}명</Text>
-            </View>
-            <View style={styles.divider} />
-            <View style={styles.infoItem}>
-              <Text style={styles.infoLabel}>평균 나이</Text>
-              <Text style={[styles.infoValue, { color: pointColor }]}>{postData.age}세</Text>
-            </View>
-            <View style={styles.divider} />
-            <View style={styles.infoItem}>
-              <Text style={styles.infoLabel}>성별</Text>
-              <Text style={[styles.infoValue, { color: pointColor }]}>남성팀</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* 멤버 구성 (블라인드 처리) */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>멤버 구성 🕵️</Text>
-          <View style={styles.memberRow}>
-            {[...Array(postData.count)].map((_, i) => (
-              <View key={i} style={styles.memberItem}>
-                <View style={[styles.avatarCircle, { backgroundColor: isMale ? '#E8F3FF' : '#FFF0F0' }]}>
-                  <Ionicons name="person" size={24} color={pointColor} />
-                </View>
-                <Text style={styles.memberName}>멤버 {i + 1}</Text>
-              </View>
+        <View style={styles.header}>
+          <Text style={styles.dept}>{targetPost.dept}</Text>
+          <Text style={styles.title}>{targetPost.title}</Text>
+          <View style={styles.tags}>
+            {targetPost.tags.map((tag: string, i: number) => (
+              <Text key={i} style={styles.tagText}>
+                {tag}
+              </Text>
             ))}
           </View>
         </View>
 
-        {/* 상세 소개글 */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>어필 내용 📝</Text>
-          <View style={styles.contentBox}>
-            <Text style={styles.contentText}>{postData.content}</Text>
-          </View>
+        <View style={styles.infoBox}>
+          <Text style={styles.infoText}>📍 인원: {targetPost.count}명</Text>
+          <Text style={styles.infoText}>🎂 평균 나이: {targetPost.age}세</Text>
+          <Text style={styles.infoText}>
+            👫 성별: {targetPost.gender === "F" ? "여자" : "남자"}
+          </Text>
         </View>
 
-        {/* 태그 */}
-        <View style={styles.tagRow}>
-          {postData.tags.map((tag, i) => (
-            <Text key={i} style={styles.tag}>{tag}</Text>
-          ))}
-        </View>
-
-        <View style={{ height: 100 }} /> 
+        <Text style={styles.content}>{targetPost.content}</Text>
       </ScrollView>
 
-      {/* 하단 고정 버튼 */}
-      <View style={styles.bottomBar}>
-        <TouchableOpacity 
-          style={[styles.matchButton, { backgroundColor: pointColor }]}
-          onPress={() => router.push(`/match/party/${postData.id}`)}
+      {/* --- 하단 고정 신청 버튼 --- */}
+      <View style={styles.footer}>
+        <TouchableOpacity
+          style={styles.requestButton}
+          onPress={handlePressRequest}
         >
-          <Text style={styles.matchButtonText}>파티 꾸려서 신청하기</Text>
+          <Text style={styles.reqBtnText}>이 팀에게 과팅 신청하기 👋</Text>
         </TouchableOpacity>
       </View>
+
+      {/* --- 🌟 [모달] 내 팀 선택하기 --- */}
+      <Modal
+        visible={modalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>어떤 팀으로 신청할까요?</Text>
+            <Text style={styles.modalSub}>
+              우리 팀 목록 ({myTeamState.myTeams.length}개)
+            </Text>
+
+            <ScrollView style={{ maxHeight: 300 }}>
+              {myTeamState.myTeams.map((team) => (
+                <TouchableOpacity
+                  key={team.id}
+                  style={styles.teamSelectCard}
+                  onPress={() => confirmRequest(team)}
+                >
+                  <View>
+                    <Text style={styles.teamSelectTitle}>{team.title}</Text>
+                    <Text style={styles.teamSelectInfo}>
+                      {team.count}명 ·{" "}
+                      {team.status === "ACTIVE" ? "공개중" : "비공개"}
+                    </Text>
+                  </View>
+                  <Text style={styles.selectArrow}>선택 👉</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={styles.closeBtn}
+              onPress={() => setModalVisible(false)}
+            >
+              <Text style={styles.closeText}>취소</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F7FB' },
-  header: { paddingTop: 60, paddingBottom: 15, paddingHorizontal: 20, backgroundColor: '#fff', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#eee' },
-  backButton: { padding: 5 },
-  headerTitle: { fontSize: 18, fontWeight: 'bold' },
-  scrollContent: { padding: 20 },
-  summaryCard: { backgroundColor: '#fff', borderRadius: 16, padding: 20, marginBottom: 20, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 5, elevation: 3 },
-  badgeRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
-  deptBadge: { backgroundColor: '#f0f0f0', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 },
-  deptText: { color: '#666', fontSize: 12, fontWeight: '600' },
-  dateText: { color: '#aaa', fontSize: 12 },
-  title: { fontSize: 20, fontWeight: 'bold', color: '#333', marginBottom: 20, lineHeight: 28 },
-  infoGrid: { flexDirection: 'row', justifyContent: 'space-around', backgroundColor: '#FAFAFA', borderRadius: 12, padding: 15 },
-  infoItem: { alignItems: 'center' },
-  divider: { width: 1, height: '100%', backgroundColor: '#eee' },
-  infoLabel: { fontSize: 12, color: '#888', marginBottom: 4 },
-  infoValue: { fontSize: 16, fontWeight: 'bold' },
-  section: { marginBottom: 25 },
-  sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 15, color: '#333' },
-  memberRow: { flexDirection: 'row', justifyContent: 'space-around', backgroundColor: '#fff', padding: 20, borderRadius: 16 },
-  memberItem: { alignItems: 'center' },
-  avatarCircle: { width: 50, height: 50, borderRadius: 25, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
-  memberName: { fontSize: 12, color: '#666' },
-  contentBox: { backgroundColor: '#fff', padding: 20, borderRadius: 16, minHeight: 100 },
-  contentText: { fontSize: 16, color: '#444', lineHeight: 24 },
-  tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  tag: { color: '#888', backgroundColor: '#fff', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: '#eee', fontSize: 14 },
-  bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#fff', padding: 20, paddingBottom: 40, borderTopWidth: 1, borderTopColor: '#eee' },
-  matchButton: { width: '100%', padding: 18, borderRadius: 12, alignItems: 'center' },
-  matchButtonText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+  container: { flex: 1, backgroundColor: "#fff" },
+  center: { flex: 1, justifyContent: "center", alignItems: "center" },
+  scrollContent: { padding: 20, paddingBottom: 100 },
+
+  header: { marginBottom: 20, marginTop: 40 },
+  dept: { color: "#3288FF", fontWeight: "bold", marginBottom: 5 },
+  title: { fontSize: 24, fontWeight: "bold", marginBottom: 10 },
+  tags: { flexDirection: "row", gap: 8 },
+  tagText: {
+    backgroundColor: "#F0F0F0",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    color: "#666",
+    fontSize: 12,
+  },
+
+  infoBox: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    backgroundColor: "#F9FAFB",
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 20,
+  },
+  infoText: { fontSize: 14, fontWeight: "bold", color: "#333" },
+
+  content: { fontSize: 16, lineHeight: 24, color: "#333" },
+
+  footer: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 20,
+    backgroundColor: "#fff",
+    borderTopWidth: 1,
+    borderTopColor: "#eee",
+  },
+  requestButton: {
+    backgroundColor: "#3288FF",
+    padding: 18,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  reqBtnText: { color: "#fff", fontSize: 18, fontWeight: "bold" },
+
+  // 모달 스타일
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    minHeight: 300,
+  },
+  modalTitle: { fontSize: 20, fontWeight: "bold", marginBottom: 5 },
+  modalSub: { fontSize: 14, color: "#888", marginBottom: 20 },
+
+  teamSelectCard: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 15,
+    borderWidth: 1,
+    borderColor: "#eee",
+    borderRadius: 10,
+    marginBottom: 10,
+  },
+  teamSelectTitle: { fontSize: 16, fontWeight: "bold", marginBottom: 2 },
+  teamSelectInfo: { fontSize: 12, color: "#666" },
+  selectArrow: { color: "#3288FF", fontWeight: "bold" },
+
+  closeBtn: { marginTop: 10, padding: 15, alignItems: "center" },
+  closeText: { color: "#666", fontWeight: "bold" },
 });
