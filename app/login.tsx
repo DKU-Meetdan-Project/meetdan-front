@@ -1,57 +1,54 @@
-// 파일 경로: app/login.tsx
 import { useRouter } from "expo-router";
 import { useState } from "react";
+// 경로가 맞는지 확인 필요 (보통 @/components/... 로 통일하는 게 좋습니다)
 import { InputBox } from "../components/InputBox";
 import { MainButton } from "@/components/MainButton";
-import {
-  ActivityIndicator,
-  Alert,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { AuthService } from "@/utils/auth";
+import { API } from "@/api/client";
 
 export default function Login() {
   const router = useRouter();
 
-  // 사용자의 입력을 저장하는 변수들 (State)
+  // State
   const [id, setId] = useState("");
   const [password, setPassword] = useState("");
-
-  // 로그인 시 로딩 시간 만드는 함수
   const [isLoading, setIsLoading] = useState(false);
 
-  // 로그인 버튼 눌렀을 때 실행되는 함수
+  // ✅ [수정됨] 로그인 함수
   const handleLogin = async () => {
-    // 나중에 여기에 백엔드 API 연동 코드가 들어갑니다!
-    // 유효성 검사
-    if (id.length < 8) {
-      Alert.alert("알림", "올바른 아이디를 입력해주세요.");
+    // 1. 유효성 검사
+    if (!id) {
+      Alert.alert("알림", "아이디(학번)를 입력해주세요.");
       return;
     }
-    setIsLoading(true);
+    // (비밀번호 검사도 필요하다면 추가)
 
-    // 모의 로그인 지연 (2초)
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    try {
+      setIsLoading(true); // 로딩 시작
 
-    setIsLoading(false);
+      // 2. API 호출
+      // 🚨 현재 Mock API는 '@dankook.ac.kr' 이메일 형식만 통과시킵니다.
+      // 테스트를 위해 일단 하드코딩된 이메일을 사용합니다.
+      // 나중에는 `API.login(id)` 또는 `API.login(id + "@dankook.ac.kr")`로 바꿔야 합니다.
+      const result = await API.login("test@dankook.ac.kr");
 
-    // 로그인 성공 처리 (임시)
-    Alert.alert("알림", "환영합니다!");
-    // 임시로 바로 메인화면으로 이동시킴
-    router.replace("/(tabs)"); // 뒤로가기 방지 위해 replace 사용
+      if (result.code === 200) {
+        // 3. 성공 시: 토큰 저장 및 메인 이동 (AuthService가 처리)
+        console.log("로그인 성공, 토큰 저장 중...");
+        await AuthService.login(result.data.accessToken);
+      } else {
+        // 실패 시
+        Alert.alert("로그인 실패", result.message || "다시 시도해주세요.");
+      }
+    } catch (e) {
+      console.error(e);
+      Alert.alert("오류", "로그인 중 문제가 발생했습니다.");
+    } finally {
+      // 4. 로딩 종료 (성공하든 실패하든 무조건 실행)
+      setIsLoading(false);
+    }
   };
-
-  // 컴포넌트 재활용
-  interface InputBoxProps {
-    label: string; // 제목은 문자열
-    placeholder: string; // 힌트글도 문자열
-    value: string; // 입력값도 문자열
-    onChangeText: (text: string) => void; // 이건 "문자열을 받아서 아무것도 반환 안 하는 함수(void)"라는 뜻
-    isPassword?: boolean; // 물음표(?)는 "있을 수도 있고 없을 수도 있다(Optional)"는 뜻
-  }
 
   return (
     <View style={styles.container}>
@@ -73,6 +70,8 @@ export default function Login() {
           placeholder="비밀번호 입력"
           value={password}
           onChangeText={setPassword}
+          // InputBox 컴포넌트 내부 구현에 따라 secureTextEntry 프롭 이름 확인 필요
+          // 보통 TextInput props를 그대로 전달한다면 secureTextEntry가 맞습니다.
           secureTextEntry={true}
         />
 
@@ -86,7 +85,7 @@ export default function Login() {
         {/* 뒤로가기 (임시) */}
         <TouchableOpacity
           onPress={() => router.back()}
-          style={{ marginTop: 20 }}
+          style={{ marginTop: 20, alignSelf: "center" }}
         >
           <Text style={{ color: "#999" }}>이전 화면으로</Text>
         </TouchableOpacity>
@@ -100,7 +99,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#fff",
     justifyContent: "center",
-    paddingHorizontal: 30, // 양옆 여백
+    paddingHorizontal: 30,
   },
   formArea: {
     width: "100%",
@@ -116,6 +115,7 @@ const styles = StyleSheet.create({
     color: "#888",
     marginBottom: 40,
   },
+  // InputBox 컴포넌트를 사용하므로 아래 스타일들은 필요 없을 수 있음 (InputBox 내부에 있다면)
   inputContainer: {
     marginBottom: 20,
   },
