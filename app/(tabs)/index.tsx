@@ -9,10 +9,9 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-// ✅ useStore와 Team 타입 가져오기
+
 import { useStore, Team } from "../../store/useStore";
 
-// 🚨 [핵심] 여기에 'export default'가 빠져있으면 에러가 납니다!
 export default function HomeTab() {
   const router = useRouter();
   const [data, setData] = useState<Team[]>([]);
@@ -20,7 +19,6 @@ export default function HomeTab() {
 
   useFocusEffect(
     useCallback(() => {
-      // ACTIVE 상태인 글만 필터링
       const activePosts = posts.filter((p) => p.status === "ACTIVE");
       setData([...activePosts]);
     }, [posts]),
@@ -31,15 +29,31 @@ export default function HomeTab() {
     const pointColor = isMale ? "#3288FF" : "#FF6B6B";
     const iconName = isMale ? "male" : "female";
 
+    // ✅ 캠퍼스 색상 구분 (죽전: 파랑 계열, 천안: 초록 계열)
+    const isJukjeon = item.campus === "죽전";
+    const campusColor = isJukjeon ? "#3288FF" : "#00C853";
+    const campusBg = isJukjeon ? "#E8F3FF" : "#E8F5E9";
+
     return (
       <TouchableOpacity
         style={styles.card}
         onPress={() => router.push(`/post/${item.id}` as any)}
       >
         <View style={styles.cardHeader}>
-          <View style={styles.deptBadge}>
-            <Text style={styles.deptText}>{item.dept}</Text>
+          <View style={{ flexDirection: "row", gap: 6 }}>
+            {/* ✅ [추가] 캠퍼스 뱃지 */}
+            <View style={[styles.badge, { backgroundColor: campusBg }]}>
+              <Text style={[styles.badgeText, { color: campusColor }]}>
+                {item.campus}
+              </Text>
+            </View>
+
+            {/* 학과 뱃지 */}
+            <View style={styles.deptBadge}>
+              <Text style={styles.deptText}>{item.dept}</Text>
+            </View>
           </View>
+
           <Text style={styles.timeText}>{item.timestamp}</Text>
         </View>
 
@@ -82,11 +96,23 @@ export default function HomeTab() {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>MeetDan 🔥</Text>
-        <TouchableOpacity
-          onPress={() => router.push("/temp/temp_notification" as any)}
-        >
-          <Ionicons name="notifications-outline" size={24} color="#333" />
-        </TouchableOpacity>
+
+        {/* 우측 아이콘 버튼들 (간격 좁게 수정됨) */}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <TouchableOpacity
+            onPress={() => router.push("/write")}
+            style={{ padding: 4 }}
+          >
+            <Ionicons name="pencil" size={24} color="#3288FF" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => router.push("/temp/temp_notification" as any)}
+            style={{ padding: 4 }}
+          >
+            <Ionicons name="notifications-outline" size={24} color="#333" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.content}>
@@ -141,6 +167,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 10,
   },
+  // ✅ [추가] 캠퍼스/학과 뱃지 공통 스타일
+  badge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  badgeText: { fontSize: 12, fontWeight: "bold" },
+
   deptBadge: {
     backgroundColor: "#f5f5f5",
     paddingHorizontal: 8,
@@ -151,7 +187,7 @@ const styles = StyleSheet.create({
   timeText: { fontSize: 12, color: "#aaa" },
   title: {
     fontSize: 17,
-    fontWeight: "bold",
+    fontWeight: "bold", // fontWeight 수정 (문자열)
     color: "#222",
     marginBottom: 12,
     lineHeight: 24,

@@ -85,16 +85,44 @@ export const useStore = create<AppState>((set, get) => ({
       posts: state.posts.filter((p) => p.id !== id),
     })),
 
+  // 🔄 공개/비공개 전환 (로직 업그레이드)
   toggleTeamStatus: (id, isPublic) =>
     set((state) => {
-      const newStatus = isPublic ? "ACTIVE" : "READY";
+      const newStatus: Team["status"] = isPublic ? "ACTIVE" : "READY";
+
+      // 1. 먼저 내 팀 목록(myTeams)의 상태를 바꿉니다.
+      const updatedMyTeams = state.myTeams.map((t) =>
+        t.id === id ? { ...t, status: newStatus } : t,
+      );
+
+      // 2. 바뀐 내 팀 정보를 가져옵니다.
+      const targetTeam = updatedMyTeams.find((t) => t.id === id);
+
+      // 3. 게시판(posts)도 동기화합니다.
+      let updatedPosts = [...state.posts];
+
+      if (isPublic && targetTeam) {
+        // ✅ [핵심 추가] 켜는 경우(ACTIVE):
+        // 게시판에 이미 있는지 확인
+        const exists = updatedPosts.find((p) => p.id === id);
+
+        if (exists) {
+          // 있으면 -> 상태만 업데이트
+          updatedPosts = updatedPosts.map((p) =>
+            p.id === id ? { ...p, status: "ACTIVE" } : p,
+          );
+        } else {
+          // 🚨 없으면 -> 게시판 맨 위에 '새로 추가' (이게 빠져있었음!)
+          updatedPosts = [targetTeam, ...updatedPosts];
+        }
+      } else {
+        // 끄는 경우(READY): 게시판에서 아예 제거 (안 보이게)
+        updatedPosts = updatedPosts.filter((p) => p.id !== id);
+      }
+
       return {
-        myTeams: state.myTeams.map((t) =>
-          t.id === id ? { ...t, status: newStatus } : t,
-        ),
-        posts: state.posts.map((p) =>
-          p.id === id ? { ...p, status: newStatus } : p,
-        ),
+        myTeams: updatedMyTeams,
+        posts: updatedPosts,
       };
     }),
 

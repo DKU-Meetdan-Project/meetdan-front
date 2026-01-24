@@ -8,6 +8,8 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  KeyboardAvoidingView,
+  Platform,
   View,
 } from "react-native";
 import { useStore } from "../../store/useStore"; // ✅ 경로 확인
@@ -60,48 +62,56 @@ export default function EditTeam() {
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Text style={styles.cancelText}>취소</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>팀 정보 수정</Text>
-        <TouchableOpacity onPress={handleUpdate}>
-          <Text style={styles.submitText}>완료</Text>
-        </TouchableOpacity>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()}>
+            <Text style={styles.cancelText}>취소</Text>
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>팀 정보 수정</Text>
+          <TouchableOpacity onPress={handleUpdate}>
+            <Text style={styles.submitText}>완료</Text>
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView
+          style={styles.formContainer}
+          contentContainerStyle={{ paddingBottom: 100 }}
+        >
+          <Text style={styles.label}>제목 (학과 + 인원)</Text>
+          <TextInput
+            style={styles.input}
+            value={title}
+            onChangeText={setTitle}
+            placeholder="예: 소프트웨어학과 3명"
+          />
+
+          <Text style={styles.label}>평균 나이</Text>
+          <TextInput
+            style={styles.input}
+            value={age}
+            onChangeText={setAge}
+            keyboardType="number-pad"
+            placeholder="23"
+          />
+
+          <Text style={styles.label}>우리 팀 어필 (MBTI, 주량 등)</Text>
+          <TextInput
+            style={[styles.input, styles.textArea]}
+            value={content}
+            onChangeText={setContent}
+            multiline={true}
+            placeholder="MBTI랑 좋아하는 술 스타일 적어주세요!"
+          />
+          <Text style={styles.hint}>
+            * 여기서 내용을 수정하면 상세 페이지에 바로 반영됩니다.
+          </Text>
+        </ScrollView>
       </View>
-
-      <ScrollView style={styles.formContainer}>
-        <Text style={styles.label}>제목 (학과 + 인원)</Text>
-        <TextInput
-          style={styles.input}
-          value={title}
-          onChangeText={setTitle}
-          placeholder="예: 소프트웨어학과 3명"
-        />
-
-        <Text style={styles.label}>평균 나이</Text>
-        <TextInput
-          style={styles.input}
-          value={age}
-          onChangeText={setAge}
-          keyboardType="number-pad"
-          placeholder="23"
-        />
-
-        <Text style={styles.label}>우리 팀 어필 (MBTI, 주량 등)</Text>
-        <TextInput
-          style={[styles.input, styles.textArea]}
-          value={content}
-          onChangeText={setContent}
-          multiline={true}
-          placeholder="MBTI랑 좋아하는 술 스타일 적어주세요!"
-        />
-        <Text style={styles.hint}>
-          * 여기서 내용을 수정하면 상세 페이지에 바로 반영됩니다.
-        </Text>
-      </ScrollView>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
