@@ -204,9 +204,6 @@ export default function MyTeamTab() {
       {/* 헤더 */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>내 팀 관리 👑</Text>
-        <TouchableOpacity onPress={() => setHistoryVisible(true)}>
-          <Ionicons name="paper-plane-outline" size={24} color="#333" />
-        </TouchableOpacity>
       </View>
 
       {/* 상단 배너 */}
@@ -240,48 +237,6 @@ export default function MyTeamTab() {
           </View>
         }
       />
-
-      {/* 모달 1: 신청 내역 */}
-      <Modal
-        visible={historyVisible}
-        animationType="slide"
-        presentationStyle="pageSheet"
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>📤 보낸 신청 내역</Text>
-            <TouchableOpacity onPress={() => setHistoryVisible(false)}>
-              <Text style={styles.closeText}>닫기</Text>
-            </TouchableOpacity>
-          </View>
-
-          {sentRequests.length === 0 ? (
-            <View style={styles.emptyHistory}>
-              <Text style={{ color: "#999" }}>아직 보낸 신청이 없습니다.</Text>
-            </View>
-          ) : (
-            <FlatList
-              data={sentRequests}
-              keyExtractor={(item) => item.id.toString()}
-              contentContainerStyle={{ padding: 20 }}
-              renderItem={({ item }) => (
-                <View style={styles.historyCard}>
-                  <View style={styles.historyRow}>
-                    <Text style={styles.historyTarget}>
-                      {item.targetDept} 팀에게
-                    </Text>
-                    <Text style={styles.historyDate}>{item.sentAt}</Text>
-                  </View>
-                  <Text style={styles.historyMyTeam}>
-                    보낸 팀: {item.myTeamTitle}
-                  </Text>
-                  <Text style={styles.historyStatus}>⏳ 수락 대기중...</Text>
-                </View>
-              )}
-            />
-          )}
-        </View>
-      </Modal>
 
       {/* 모달 2: 초대코드 입력 */}
       <Modal

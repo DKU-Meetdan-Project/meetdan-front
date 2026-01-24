@@ -1,232 +1,337 @@
-// 파일 경로: app/match/party/[id].tsx
+// 파일: app/match/party/[id].tsx
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Alert,
-  SafeAreaView,
+  Image,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
+  SafeAreaView,
 } from "react-native";
+import { useStore, Team } from "../../../store/useStore";
 
-export default function MatchPartyLobby() {
+export default function MatchPartyDetail() {
   const router = useRouter();
-  const { id } = useLocalSearchParams(); // 신청하려는 상대 팀 ID
+  const { id } = useLocalSearchParams();
+  const { posts } = useStore(); // 실제로는 '요청 온 팀 목록'에서 찾아야 하지만, 지금은 전체 팀에서 찾음
+  const [team, setTeam] = useState<Team | null>(null);
 
-  const inviteCode = "FIGHT-8282"; // (임시) 파티 코드
+  useEffect(() => {
+    // ID로 팀 정보 찾기
+    const target = posts.find((p) => p.id.toString() === id);
+    if (target) {
+      setTeam(target);
+    } else {
+      // (테스트용) 데이터가 없으면 가짜 데이터라도 보여줌
+      setTeam({
+        id: 999,
+        title: "데이터를 찾을 수 없음",
+        campus: "죽전",
+        dept: "알 수 없음",
+        gender: "F",
+        status: "ACTIVE",
+        content: "삭제되었거나 존재하지 않는 팀입니다.",
+        count: 3,
+        currentCount: 3,
+        age: 20,
+        timestamp: "Now",
+        tags: [],
+        members: [],
+      });
+    }
+  }, [id, posts]);
 
-  const [members, setMembers] = useState([
-    { name: "나 (파티장)", dept: "소프트", status: "READY", avatar: "person" },
-    { name: "친구 대기중...", dept: "-", status: "WAITING", avatar: "add" },
-    { name: "친구 대기중...", dept: "-", status: "WAITING", avatar: "add" },
-  ]);
+  if (!team) return null;
 
-  const isReady = members.every((m) => m.status === "READY");
-  const currentCount = members.filter((m) => m.status === "READY").length;
+  const isMale = team.gender === "M";
+  const themeColor = isMale ? "#3288FF" : "#FF6B6B";
+  const bgBadgeColor = isMale ? "#E8F3FF" : "#FFF0F0";
 
-  const simulateFriendJoin = () => {
-    const emptyIndex = members.findIndex((m) => m.status === "WAITING");
-    if (emptyIndex === -1) return;
-    const newMembers = [...members];
-    newMembers[emptyIndex] = {
-      name: `파티원 ${emptyIndex + 1}`,
-      dept: "체육",
-      status: "READY",
-      avatar: "person-outline",
-    };
-    setMembers(newMembers);
-  };
-
-  const handleRequest = () => {
-    // 백엔드로 신청서 전송 (POST /api/match/request)
-
-    // Alert에 버튼 옵션을 추가해서, '확인'을 눌러야만 이동하도록 변경
+  // 수락 핸들러
+  const handleAccept = () => {
     Alert.alert(
-      "신청 성공! 💌", // 제목
-      "상대방이 수락하면 채팅방이 열립니다.", // 내용
+      "매칭 수락 💖",
+      "채팅방이 생성되었습니다! 대화를 시작해보세요.",
       [
         {
-          text: "확인", // 버튼 이름
-          onPress: () => {
-            // 확인 버튼을 눌렀을 때 실행될 코드
-            // 탭이 있는 메인 화면으로 가려면 '/(tabs)' 경로 이동
-            router.replace("/(tabs)");
-          },
+          text: "채팅방으로 이동",
+          // 채팅방 ID는 팀 ID를 따라간다고 가정
+          onPress: () => router.replace(`/chat/${team.id}` as any),
         },
-      ]
+      ],
     );
   };
 
+  // 거절 핸들러
+  const handleReject = () => {
+    Alert.alert("거절하시겠습니까?", "이 팀의 요청을 삭제합니다.", [
+      { text: "취소", style: "cancel" },
+      {
+        text: "거절하기",
+        style: "destructive",
+        onPress: () => {
+          // TODO: store에서 요청 삭제 로직 호출
+          router.back();
+        },
+      },
+    ]);
+  };
+
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
+      {/* 1. 헤더 (뒤로가기) */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="close" size={24} color="#333" />
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <Ionicons name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>매칭 파티 꾸리기</Text>
+        <Text style={styles.headerTitle}>상대 팀 프로필</Text>
         <View style={{ width: 24 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.titleArea}>
-          <Text style={styles.mainTitle}>
-            함께 나갈 친구를{"\n"}초대해주세요!
-          </Text>
-          <Text style={styles.subTitle}>
-            인원이 다 모여야 신청서를 보낼 수 있어요.
-          </Text>
-        </View>
+      <ScrollView contentContainerStyle={{ paddingBottom: 120 }}>
+        {/* 2. 팀 요약 카드 */}
+        <View style={styles.profileCard}>
+          <View style={styles.avatarContainer}>
+            <Image
+              source={{ uri: "https://via.placeholder.com/100" }} // 나중엔 실제 프사
+              style={styles.avatar}
+            />
+            <View style={[styles.genderBadge, { backgroundColor: themeColor }]}>
+              <Ionicons
+                name={isMale ? "male" : "female"}
+                size={12}
+                color="#fff"
+              />
+            </View>
+          </View>
 
-        <TouchableOpacity
-          style={styles.codeCard}
-          onPress={() => Alert.alert("복사됨")}
-        >
-          <Text style={styles.codeLabel}>파티 초대 코드</Text>
-          <Text style={styles.codeText}>{inviteCode}</Text>
-          <Text style={styles.codeDesc}>터치해서 복사하기</Text>
-        </TouchableOpacity>
+          <Text style={styles.teamTitle}>{team.title}</Text>
 
-        <View style={styles.memberGrid}>
-          {members.map((member, index) => (
-            <View key={index} style={styles.memberSlot}>
-              <View
+          <View style={styles.badgeRow}>
+            {/* 캠퍼스 뱃지 */}
+            <View
+              style={[
+                styles.infoBadge,
+                {
+                  backgroundColor:
+                    team.campus === "죽전" ? "#E8F3FF" : "#E8F5E9",
+                },
+              ]}
+            >
+              <Text
                 style={[
-                  styles.avatarCircle,
-                  member.status === "WAITING" && styles.waitingCircle,
+                  styles.infoText,
+                  { color: team.campus === "죽전" ? "#3288FF" : "#00C853" },
                 ]}
               >
-                <Ionicons
-                  name={member.avatar as any}
-                  size={30}
-                  color={member.status === "READY" ? "#fff" : "#ccc"}
-                />
+                {team.campus}
+              </Text>
+            </View>
+            <View style={styles.divider} />
+            <Text style={styles.summaryText}>
+              {team.dept} · {team.age}년생 ({team.age}세)
+            </Text>
+          </View>
+        </View>
+
+        {/* 3. 팀 소개글 */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>💬 우리 팀을 소개합니다</Text>
+          <View style={styles.contentBox}>
+            <Text style={styles.contentText}>{team.content}</Text>
+            <View style={styles.tagRow}>
+              {team.tags?.map((tag, i) => (
+                <Text key={i} style={styles.tag}>
+                  {tag}
+                </Text>
+              ))}
+            </View>
+          </View>
+        </View>
+
+        {/* 4. 멤버 상세 정보 */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>
+            👥 멤버 구성 ({team.currentCount}/{team.count})
+          </Text>
+
+          {/* 리더 */}
+          <View style={styles.memberRow}>
+            <View style={styles.memberIcon}>
+              <Text style={styles.memberEmoji}>👑</Text>
+            </View>
+            <View>
+              <Text style={styles.memberName}>
+                {team.members?.[0]?.name || "팀장"} (본인)
+              </Text>
+              <Text style={styles.memberInfo}>
+                {team.dept} · {team.gender === "M" ? "남자" : "여자"}
+              </Text>
+            </View>
+          </View>
+
+          {/* 팀원들 (목업 데이터 - 실제로는 members 배열을 map으로 돌려야 함) */}
+          {[...Array(team.count - 1)].map((_, i) => (
+            <View key={i} style={styles.memberRow}>
+              <View style={[styles.memberIcon, { backgroundColor: "#f0f0f0" }]}>
+                <Text style={styles.memberEmoji}>🙂</Text>
               </View>
-              <Text style={styles.memberName}>{member.name}</Text>
+              <View>
+                <Text style={styles.memberName}>팀원 {i + 1}</Text>
+                <Text style={styles.memberInfo}>{team.dept} · 정보 비공개</Text>
+              </View>
             </View>
           ))}
         </View>
-
-        {!isReady && (
-          <TouchableOpacity
-            style={styles.testButton}
-            onPress={simulateFriendJoin}
-          >
-            <Text style={styles.testButtonText}>
-              🛠 (개발용) 친구 입장시키기
-            </Text>
-          </TouchableOpacity>
-        )}
       </ScrollView>
 
+      {/* 5. 하단 고정 액션 버튼 */}
       <View style={styles.bottomBar}>
+        <TouchableOpacity style={styles.rejectBtn} onPress={handleReject}>
+          <Text style={styles.rejectText}>거절하기</Text>
+        </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.actionButton, !isReady && styles.disabledButton]}
-          disabled={!isReady}
-          onPress={handleRequest}
+          style={[styles.acceptBtn, { backgroundColor: themeColor }]}
+          onPress={handleAccept}
         >
-          <Text style={styles.actionButtonText}>
-            {isReady ? "상대팀에게 신청 보내기 🚀" : "친구 기다리는 중..."}
-          </Text>
+          <Text style={styles.acceptText}>수락하고 채팅하기</Text>
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#fff" },
   header: {
-    height: 50,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    paddingTop: 60,
     paddingHorizontal: 20,
+    paddingBottom: 15,
     borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
+    borderBottomColor: "#eee",
   },
-  headerTitle: { fontSize: 16, fontWeight: "bold" },
-  content: { padding: 24, alignItems: "center" },
-  titleArea: { alignItems: "center", marginBottom: 30, marginTop: 10 },
-  mainTitle: {
-    fontSize: 22,
-    fontWeight: "bold",
-    textAlign: "center",
-    color: "#333",
-    marginBottom: 8,
-    lineHeight: 30,
-  },
-  subTitle: { fontSize: 15, color: "#888", textAlign: "center" },
-  codeCard: {
-    width: "100%",
-    backgroundColor: "#F5F7FB",
-    padding: 20,
-    borderRadius: 16,
+  headerTitle: { fontSize: 18, fontWeight: "bold", color: "#333" },
+  backBtn: { padding: 4 },
+
+  profileCard: {
     alignItems: "center",
-    marginBottom: 40,
+    paddingVertical: 30,
+    borderBottomWidth: 8,
+    borderBottomColor: "#F5F7FB",
   },
-  codeLabel: { fontSize: 14, color: "#666", marginBottom: 5 },
-  codeText: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: "#3288FF",
-    letterSpacing: 2,
-    marginBottom: 5,
+  avatarContainer: { position: "relative", marginBottom: 15 },
+  avatar: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: "#eee",
   },
-  codeDesc: { fontSize: 12, color: "#999" },
-  memberGrid: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    width: "100%",
-    marginBottom: 20,
-  },
-  memberSlot: { alignItems: "center", width: "30%" },
-  avatarCircle: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: "#3288FF",
+  genderBadge: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 10,
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 5,
-    elevation: 3,
-  },
-  waitingCircle: {
-    backgroundColor: "#fff",
     borderWidth: 2,
-    borderColor: "#ddd",
-    borderStyle: "dashed",
+    borderColor: "#fff",
   },
-  memberName: { fontSize: 14, fontWeight: "bold", color: "#333" },
-  testButton: {
-    marginTop: 20,
-    padding: 10,
-    backgroundColor: "#eee",
-    borderRadius: 5,
+  teamTitle: {
+    fontSize: 22,
+    fontWeight: "bold",
+    marginBottom: 8,
+    color: "#333",
   },
-  testButtonText: { fontSize: 12, color: "#555" },
+  badgeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  infoBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    marginRight: 8,
+  },
+  infoText: { fontSize: 13, fontWeight: "bold" },
+  divider: { width: 1, height: 12, backgroundColor: "#ddd", marginRight: 8 },
+  summaryText: { fontSize: 15, color: "#666" },
+
+  section: { padding: 25, borderBottomWidth: 1, borderBottomColor: "#eee" },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    marginBottom: 15,
+    color: "#333",
+  },
+  contentBox: { backgroundColor: "#F9FAFB", padding: 20, borderRadius: 12 },
+  contentText: {
+    fontSize: 16,
+    lineHeight: 24,
+    color: "#444",
+    marginBottom: 15,
+  },
+  tagRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  tag: {
+    backgroundColor: "#fff",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+    fontSize: 13,
+    color: "#666",
+    borderWidth: 1,
+    borderColor: "#eee",
+    overflow: "hidden",
+  },
+
+  memberRow: { flexDirection: "row", alignItems: "center", marginBottom: 15 },
+  memberIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#FFF9C4",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  memberEmoji: { fontSize: 20 },
+  memberName: { fontSize: 16, fontWeight: "bold", color: "#333" },
+  memberInfo: { fontSize: 13, color: "#888", marginTop: 2 },
+
   bottomBar: {
     position: "absolute",
     bottom: 0,
-    left: 0,
-    right: 0,
+    width: "100%",
+    flexDirection: "row",
     padding: 20,
+    paddingBottom: 40,
     backgroundColor: "#fff",
     borderTopWidth: 1,
-    borderTopColor: "#f0f0f0",
-    paddingBottom: 30,
+    borderTopColor: "#eee",
+    gap: 12,
   },
-  actionButton: {
-    backgroundColor: "#3288FF",
-    paddingVertical: 18,
+  rejectBtn: {
+    flex: 1,
+    paddingVertical: 16,
+    borderRadius: 12,
+    backgroundColor: "#f5f5f5",
+    alignItems: "center",
+  },
+  rejectText: { fontSize: 16, fontWeight: "bold", color: "#666" },
+  acceptBtn: {
+    flex: 2,
+    paddingVertical: 16,
     borderRadius: 12,
     alignItems: "center",
   },
-  disabledButton: { backgroundColor: "#ddd" },
-  actionButtonText: { color: "#fff", fontSize: 18, fontWeight: "bold" },
+  acceptText: { fontSize: 16, fontWeight: "bold", color: "#fff" },
 });
