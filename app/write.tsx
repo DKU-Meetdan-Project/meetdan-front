@@ -10,17 +10,18 @@ import {
   TouchableOpacity,
   View,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 
-// ✅ [수정 1] store의 useStore 훅 가져오기
 import { useStore, Team } from "../store/useStore";
 
 export default function Write() {
   const router = useRouter();
-
-  // ✅ [수정 2] useStore에서 '내 팀에 추가하는 함수(joinTeam)' 가져오기
-  // (이름은 joinTeam이지만 "내 팀 목록에 넣는다"는 기능은 똑같습니다)
   const { joinTeam } = useStore();
+
+  // ✅ [추가] 캠퍼스 선택 상태 (기본값: 죽전)
+  const [campus, setCampus] = useState<"죽전" | "천안">("죽전");
 
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
@@ -29,7 +30,6 @@ export default function Write() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async () => {
-    // 1. 유효성 검사
     if (!title || !content || !age) {
       Alert.alert("잠깐!", "제목, 내용, 나이를 모두 입력해주세요.");
       return;
@@ -38,29 +38,25 @@ export default function Write() {
     setIsSubmitting(true);
 
     try {
-      // ✅ [수정 3] Team 객체 완벽하게 조립하기
-      // (store.ts가 없으므로 여기서 id랑 코드를 만들어줘야 함)
       const newTeam: Team = {
-        id: Date.now(), // 고유 ID 생성
+        id: Date.now(),
         title: title,
         content: content,
         age: parseInt(age),
         count: count,
-        currentCount: 1, // 방장이니까 1명부터 시작
-        dept: "소프트웨어학과", // (나중에 로그인 정보로 대체)
-        gender: "M", // (나중에 로그인 정보로 대체)
-        campus: "죽전",
+        currentCount: 1,
+        dept: "소프트웨어학과",
+        gender: "M",
+        campus: campus, // ✅ [수정] 사용자가 선택한 캠퍼스 값 적용
         tags: ["#신규", "#설렘"],
-        status: "RECRUITING", // 모집중 상태
+        status: "RECRUITING",
         timestamp: "방금 전",
-        inviteCode: Math.random().toString(36).substring(2, 8).toUpperCase(), // 랜덤 초대코드 생성 (예: X7A9Z)
+        inviteCode: Math.random().toString(36).substring(2, 8).toUpperCase(),
         members: [{ name: "나(팀장)", role: "LEADER" }],
       };
 
-      // 2. 스토어에 저장 (Zustand)
       joinTeam(newTeam);
 
-      // 3. 성공 알림 및 이동
       Alert.alert(
         "방 생성 완료! 🏠",
         "내 팀 관리 탭에서 초대 코드를 확인하세요.",
@@ -80,8 +76,10 @@ export default function Write() {
   };
 
   return (
-    <View style={styles.container}>
-      {/* 헤더 */}
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()}>
           <Text style={styles.cancelText}>취소</Text>
@@ -96,8 +94,34 @@ export default function Write() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.formContainer}>
-        {/* 인원수 선택 */}
+      <ScrollView
+        style={styles.formContainer}
+        contentContainerStyle={{ paddingBottom: 100 }}
+      >
+        {/* ✅ [추가] 캠퍼스 선택 UI */}
+        <Text style={styles.label}>캠퍼스는 어디인가요?</Text>
+        <View style={styles.countContainer}>
+          {["죽전", "천안"].map((c) => (
+            <TouchableOpacity
+              key={c}
+              style={[
+                styles.countButton,
+                campus === c && styles.countButtonActive,
+              ]}
+              onPress={() => setCampus(c as "죽전" | "천안")}
+            >
+              <Text
+                style={[
+                  styles.countText,
+                  campus === c && styles.countTextActive,
+                ]}
+              >
+                {c}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
         <Text style={styles.label}>몇 명이서 나가나요?</Text>
         <View style={styles.countContainer}>
           {[2, 3, 4].map((num) => (
@@ -121,7 +145,6 @@ export default function Write() {
           ))}
         </View>
 
-        {/* 평균 나이 */}
         <Text style={styles.label}>평균 나이는?</Text>
         <TextInput
           style={styles.input}
@@ -133,7 +156,6 @@ export default function Write() {
           maxLength={2}
         />
 
-        {/* 제목 */}
         <Text style={styles.label}>제목 (임팩트 있게!)</Text>
         <TextInput
           style={styles.input}
@@ -143,7 +165,6 @@ export default function Write() {
           onChangeText={setTitle}
         />
 
-        {/* 어필 내용 */}
         <Text style={styles.label}>우리 팀 매력 어필</Text>
         <TextInput
           style={[styles.input, styles.textArea]}
@@ -152,9 +173,10 @@ export default function Write() {
           multiline={true}
           value={content}
           onChangeText={setContent}
+          textAlignVertical="top"
         />
       </ScrollView>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -169,6 +191,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderBottomWidth: 1,
     borderBottomColor: "#eee",
+    backgroundColor: "#fff",
   },
   headerTitle: { fontSize: 18, fontWeight: "bold" },
   cancelText: { fontSize: 16, color: "#666" },
