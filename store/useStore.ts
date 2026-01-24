@@ -1,6 +1,7 @@
 // 파일: store/useStore.ts
 import { create } from "zustand";
 
+// 1. Team 인터페이스
 export interface Team {
   id: number;
   title: string;
@@ -18,10 +19,30 @@ export interface Team {
   inviteCode?: string;
 }
 
+// 2. 매칭 정보 인터페이스
+export interface Match {
+  id: string;
+  myTeamId: number;
+  partnerTeamId: number;
+  partnerTeamName: string;
+  startedAt: string;
+}
+
+// 3. 신청서 데이터 (보낸 것, 받은 것 공통 사용)
+export interface RequestData {
+  id: number;
+  senderTeamId: number; // 보낸 팀 ID
+  receiverTeamId: number; // 받는 팀 ID
+  status: "WAITING" | "ACCEPTED" | "REJECTED";
+  timestamp: string;
+}
+
 interface AppState {
   posts: Team[];
   myTeams: Team[];
-  sentRequests: any[]; // 신청 내역 저장소
+  sentRequests: RequestData[]; // ✅ [수정] 타입 통일
+  receivedRequests: RequestData[];
+  matches: Match[];
 
   setPosts: (posts: Team[]) => void;
   addPost: (post: Team) => void;
@@ -32,8 +53,8 @@ interface AppState {
   joinTeamByCode: (code: string) => boolean;
   updateTeam: (id: number, updates: Partial<Team>) => void;
 
-  // ✅ [추가됨] 매칭 신청 함수
   sendMatchRequest: (myTeamId: number, targetTeamId: number) => boolean;
+  acceptMatch: (myTeamId: number, partnerTeamId: number) => string;
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -69,78 +90,109 @@ export const useStore = create<AppState>((set, get) => ({
       tags: ["#에너자이저", "#주량무제한"],
       members: [{ name: "박철수", role: "LEADER" }],
     },
+    {
+      id: 300,
+      title: "컴공 코딩 기계들",
+      campus: "죽전",
+      dept: "소프트웨어학과",
+      gender: "M",
+      status: "ACTIVE",
+      content: "알고리즘 잘 푸는 여자분 구합니다.",
+      count: 3,
+      currentCount: 3,
+      age: 23,
+      timestamp: "30분 전",
+      tags: ["#너드남", "#안경씀", "#체크남방"],
+      members: [{ name: "이코딩", role: "LEADER" }],
+    },
   ],
-  myTeams: [],
-  sentRequests: [],
 
-  // 2. 액션들
+  myTeams: [
+    {
+      id: 100,
+      title: "경영학과 존잘러",
+      campus: "죽전",
+      dept: "경영학과",
+      gender: "M",
+      status: "ACTIVE",
+      content: "우리가 짱임",
+      count: 3,
+      currentCount: 3,
+      age: 24,
+      timestamp: "어제",
+      tags: ["#재밌음"],
+      members: [{ name: "나(팀장)", role: "LEADER" }],
+      inviteCode: "TEST01",
+    },
+  ],
+
+  // ✅ [추가] 보낸 신청 Mock Data (내가 디자인과에 신청함)
+  sentRequests: [
+    {
+      id: 888,
+      senderTeamId: 100, // 내 팀
+      receiverTeamId: 1, // 디자인과 팀
+      status: "WAITING",
+      timestamp: "1시간 전",
+    },
+  ],
+
+  receivedRequests: [
+    {
+      id: 999,
+      senderTeamId: 300,
+      receiverTeamId: 100,
+      status: "WAITING",
+      timestamp: "방금 도착",
+    },
+  ],
+
+  matches: [],
+
+  // ... (기존 액션들 동일) ...
   setPosts: (newPosts) => set({ posts: newPosts }),
   addPost: (newPost) => set((state) => ({ posts: [newPost, ...state.posts] })),
   joinTeam: (newTeam) =>
     set((state) => ({ myTeams: [newTeam, ...state.myTeams] })),
-
   deleteTeam: (id) =>
     set((state) => ({
       myTeams: state.myTeams.filter((t) => t.id !== id),
       posts: state.posts.filter((p) => p.id !== id),
     })),
-
-  // 🔄 공개/비공개 전환 (로직 업그레이드)
   toggleTeamStatus: (id, isPublic) =>
     set((state) => {
       const newStatus: Team["status"] = isPublic ? "ACTIVE" : "READY";
-
-      // 1. 먼저 내 팀 목록(myTeams)의 상태를 바꿉니다.
       const updatedMyTeams = state.myTeams.map((t) =>
         t.id === id ? { ...t, status: newStatus } : t,
       );
-
-      // 2. 바뀐 내 팀 정보를 가져옵니다.
       const targetTeam = updatedMyTeams.find((t) => t.id === id);
-
-      // 3. 게시판(posts)도 동기화합니다.
       let updatedPosts = [...state.posts];
-
       if (isPublic && targetTeam) {
-        // ✅ [핵심 추가] 켜는 경우(ACTIVE):
-        // 게시판에 이미 있는지 확인
         const exists = updatedPosts.find((p) => p.id === id);
-
         if (exists) {
-          // 있으면 -> 상태만 업데이트
           updatedPosts = updatedPosts.map((p) =>
-            p.id === id ? { ...p, status: "ACTIVE" } : p,
+            p.id === id ? { ...p, status: "ACTIVE" as const } : p,
           );
         } else {
-          // 🚨 없으면 -> 게시판 맨 위에 '새로 추가' (이게 빠져있었음!)
           updatedPosts = [targetTeam, ...updatedPosts];
         }
       } else {
-        // 끄는 경우(READY): 게시판에서 아예 제거 (안 보이게)
         updatedPosts = updatedPosts.filter((p) => p.id !== id);
       }
-
-      return {
-        myTeams: updatedMyTeams,
-        posts: updatedPosts,
-      };
+      return { myTeams: updatedMyTeams, posts: updatedPosts };
     }),
-
   simulateJoinMember: (id) =>
     set((state) => ({
       myTeams: state.myTeams.map((t) => {
         if (t.id === id && t.currentCount < t.count) {
           const newCount = t.currentCount + 1;
-          return {
-            ...t,
-            currentCount: newCount,
-            status: newCount === t.count ? "READY" : t.status,
-          };
+          const nextStatus: Team["status"] =
+            newCount === t.count ? "READY" : t.status;
+          return { ...t, currentCount: newCount, status: nextStatus };
         }
         return t;
       }),
     })),
-
   joinTeamByCode: (code) => {
     if (!code) return false;
     const friendTeam: Team = {
@@ -162,7 +214,6 @@ export const useStore = create<AppState>((set, get) => ({
     set((state) => ({ myTeams: [friendTeam, ...state.myTeams] }));
     return true;
   },
-
   updateTeam: (id, updates) =>
     set((state) => ({
       myTeams: state.myTeams.map((t) =>
@@ -171,7 +222,7 @@ export const useStore = create<AppState>((set, get) => ({
       posts: state.posts.map((p) => (p.id === id ? { ...p, ...updates } : p)),
     })),
 
-  // ✅ [구현] 매칭 신청
+  // ✅ [수정] RequestData 형식에 맞춰 저장
   sendMatchRequest: (myTeamId, targetTeamId) => {
     const state = get();
     const myTeam = state.myTeams.find((t) => t.id === myTeamId);
@@ -179,19 +230,38 @@ export const useStore = create<AppState>((set, get) => ({
 
     if (!myTeam || !targetTeam) return false;
 
+    const newRequest: RequestData = {
+      id: Date.now(),
+      senderTeamId: myTeamId,
+      receiverTeamId: targetTeamId,
+      status: "WAITING",
+      timestamp: "방금 전",
+    };
+
     set((state) => ({
-      sentRequests: [
-        {
-          id: Date.now(),
-          myTeamTitle: myTeam.title,
-          targetTeamTitle: targetTeam.title,
-          targetDept: targetTeam.dept,
-          status: "WAITING",
-          sentAt: new Date().toLocaleDateString(),
-        },
-        ...state.sentRequests,
-      ],
+      sentRequests: [newRequest, ...state.sentRequests],
     }));
     return true;
+  },
+
+  acceptMatch: (myTeamId, partnerTeamId) => {
+    const sortedIds = [myTeamId, partnerTeamId].sort((a, b) => a - b);
+    const matchId = `match_${sortedIds[0]}_${sortedIds[1]}`;
+    const state = get();
+    const partner =
+      state.posts.find((p) => p.id === partnerTeamId) ||
+      state.myTeams.find((t) => t.id === partnerTeamId);
+    const newMatch: Match = {
+      id: matchId,
+      myTeamId,
+      partnerTeamId,
+      partnerTeamName: partner ? partner.title : "알 수 없는 팀",
+      startedAt: new Date().toLocaleDateString(),
+    };
+    const exists = state.matches.find((m) => m.id === matchId);
+    if (!exists) {
+      set((state) => ({ matches: [newMatch, ...state.matches] }));
+    }
+    return matchId;
   },
 }));
