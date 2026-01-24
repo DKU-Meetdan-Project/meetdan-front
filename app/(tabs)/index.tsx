@@ -1,4 +1,4 @@
-// 파일 경로: app/(tabs)/index.tsx
+// 파일: app/(tabs)/index.tsx
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
@@ -9,29 +9,24 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useStore } from "../../store/useStore"; // store에서 데이터 가져오기
+// ✅ useStore와 Team 타입 가져오기
+import { useStore, Team } from "../../store/useStore";
 
+// 🚨 [핵심] 여기에 'export default'가 빠져있으면 에러가 납니다!
 export default function HomeTab() {
   const router = useRouter();
-  const [data, setData] = useState<any[]>([]);
-  const { posts, addPost } = useStore();
+  const [data, setData] = useState<Team[]>([]);
+  const { posts } = useStore();
 
-  // 화면이 포커스될 때마다 데이터 새로고침 (ACTIVE인 글만)
   useFocusEffect(
     useCallback(() => {
+      // ACTIVE 상태인 글만 필터링
       const activePosts = posts.filter((p) => p.status === "ACTIVE");
       setData([...activePosts]);
-    }, []),
+    }, [posts]),
   );
 
-  const renderItem = ({ item }: { item: any }) => {
-    <TouchableOpacity
-      style={styles.card}
-      // 👇 클릭 시 상세 페이지로 이동 (id 전달)
-      onPress={() => router.push(`/post/${item.id}`)}
-    >
-      {" "}
-    </TouchableOpacity>;
+  const renderItem = ({ item }: { item: Team }) => {
     const isMale = item.gender === "M";
     const pointColor = isMale ? "#3288FF" : "#FF6B6B";
     const iconName = isMale ? "male" : "female";
@@ -39,7 +34,7 @@ export default function HomeTab() {
     return (
       <TouchableOpacity
         style={styles.card}
-        onPress={() => router.push(`/post/${item.id}`)}
+        onPress={() => router.push(`/post/${item.id}` as any)}
       >
         <View style={styles.cardHeader}>
           <View style={styles.deptBadge}>
@@ -66,14 +61,14 @@ export default function HomeTab() {
               style={{ marginRight: 4 }}
             />
             <Text style={[styles.infoText, { color: pointColor }]}>
-              {item.count}명 · 평균 {item.avgAge}세
+              {item.count}명 · 평균 {item.age}세
             </Text>
           </View>
         </View>
 
         <View style={styles.tagRow}>
           {item.tags &&
-            item.tags.map((tag: string, index: number) => (
+            item.tags.map((tag, index) => (
               <Text key={index} style={styles.tagText}>
                 {tag}
               </Text>
@@ -87,9 +82,8 @@ export default function HomeTab() {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>MeetDan 🔥</Text>
-        {/* 여기 있던 '글쓰기' 버튼은 하단 탭으로 이동했으므로 삭제하거나 알림 버튼으로 대체 */}
         <TouchableOpacity
-          onPress={() => router.push("/temp/temp_notification")}
+          onPress={() => router.push("/temp/temp_notification" as any)}
         >
           <Ionicons name="notifications-outline" size={24} color="#333" />
         </TouchableOpacity>
@@ -99,7 +93,7 @@ export default function HomeTab() {
         <FlatList
           data={data}
           renderItem={renderItem}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => item.id.toString()}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 20 }}
           ListEmptyComponent={

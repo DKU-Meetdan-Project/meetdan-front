@@ -1,6 +1,7 @@
+// 파일: app/(tabs)/my_team.tsx
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useState } from "react";
+import { useRouter } from "expo-router";
+import { useState } from "react";
 import {
   Alert,
   FlatList,
@@ -12,37 +13,32 @@ import {
   TextInput,
 } from "react-native";
 
-// ✅ [핵심] 여기에 joinTeamByCode가 포함되어 있어야 에러가 안 납니다!
-import {
-  myTeamState,
-  toggleTeamStatus,
-  simulateJoinMember,
-  deleteTeam,
-  joinTeamByCode,
-} from "../../store";
+// ✅ [핵심 변경] store 폴더의 store.ts가 아니라 useStore.ts를 가져옵니다.
+import { useStore, Team } from "../../store/useStore";
 
 export default function MyTeamTab() {
   const router = useRouter();
 
-  // 상태 관리
-  const [myTeams, setMyTeams] = useState<any[]>([]);
-  const [expandedId, setExpandedId] = useState<number | null>(null);
+  // ✅ [Zustand Hook 사용]
+  // useState로 관리하던 myTeams, sentRequests를 여기서 바로 꺼내 씁니다.
+  // 액션 함수들도 여기서 바로 가져옵니다.
+  const {
+    myTeams,
+    sentRequests,
+    deleteTeam,
+    joinTeamByCode,
+    toggleTeamStatus,
+    simulateJoinMember,
+  } = useStore();
 
-  // 신청 내역 모달 상태
+  const [expandedId, setExpandedId] = useState<number | null>(null);
   const [historyVisible, setHistoryVisible] = useState(false);
-  const [sentRequests, setSentRequests] = useState<any[]>([]);
 
   // 초대 코드 입력 모달 상태
   const [joinModalVisible, setJoinModalVisible] = useState(false);
   const [inputCode, setInputCode] = useState("");
 
-  // 화면 포커스 될 때마다 데이터 갱신
-  useFocusEffect(
-    useCallback(() => {
-      setMyTeams([...myTeamState.myTeams]);
-      setSentRequests([...myTeamState.sentRequests]);
-    }, [])
-  );
+  // 🚨 [삭제됨] useFocusEffect 더 이상 필요 없음! (Zustand가 알아서 화면 갱신해줌)
 
   // 팀 삭제 핸들러
   const handleDelete = (id: number) => {
@@ -55,26 +51,24 @@ export default function MyTeamTab() {
           text: "삭제",
           style: "destructive",
           onPress: () => {
-            deleteTeam(id);
-            setMyTeams([...myTeamState.myTeams]); // 화면 갱신
+            deleteTeam(id); // ✅ 스토어 함수 호출
           },
         },
-      ]
+      ],
     );
   };
 
-  // ✅ 초대 코드로 팀 참가 핸들러
+  // 초대 코드로 팀 참가 핸들러
   const handleJoinTeam = () => {
     if (inputCode.length < 1) {
       Alert.alert("잠깐!", "초대 코드를 입력해주세요.");
       return;
     }
 
-    const success = joinTeamByCode(inputCode);
+    const success = joinTeamByCode(inputCode); // ✅ 스토어 함수 호출
     if (success) {
-      setJoinModalVisible(false); // 모달 닫기
-      setInputCode(""); // 입력창 초기화
-      setMyTeams([...myTeamState.myTeams]); // 리스트 갱신
+      setJoinModalVisible(false);
+      setInputCode("");
       Alert.alert("참가 완료! 🤝", `친구 팀(${inputCode})에 합류했습니다.`);
     } else {
       Alert.alert("오류", "코드가 올바르지 않거나 이미 가입된 팀입니다.");
@@ -82,7 +76,7 @@ export default function MyTeamTab() {
   };
 
   // 팀 카드 렌더링
-  const renderTeamCard = ({ item }: { item: any }) => {
+  const renderTeamCard = ({ item }: { item: Team }) => {
     const isFull = item.currentCount >= item.count;
     const isPublic = item.status === "ACTIVE";
     const isExpanded = expandedId === item.id;
@@ -103,8 +97,8 @@ export default function MyTeamTab() {
                 isPublic
                   ? styles.bgBlue
                   : isFull
-                  ? styles.bgGreen
-                  : styles.bgGray,
+                    ? styles.bgGreen
+                    : styles.bgGray,
               ]}
             >
               <Text
@@ -113,8 +107,8 @@ export default function MyTeamTab() {
                   isPublic
                     ? styles.textWhite
                     : isFull
-                    ? styles.textWhite
-                    : styles.textGray,
+                      ? styles.textWhite
+                      : styles.textGray,
                 ]}
               >
                 {isPublic ? "🔥 공개중" : isFull ? "✅ 준비완료" : "⏳ 모집중"}
@@ -132,11 +126,11 @@ export default function MyTeamTab() {
           <View style={styles.detailSection}>
             <View style={styles.divider} />
 
-            {/* 관리 버튼 (수정/삭제) */}
+            {/* 관리 버튼 */}
             <View style={styles.manageRow}>
               <TouchableOpacity
                 style={styles.manageBtn}
-                onPress={() => router.push(`/edit/${item.id}`)}
+                onPress={() => router.push(`/edit/${item.id}` as any)}
               >
                 <Ionicons name="pencil" size={16} color="#666" />
                 <Text style={styles.manageText}>정보 수정</Text>
@@ -168,8 +162,7 @@ export default function MyTeamTab() {
                   isPublic ? styles.bgGray : styles.bgBlue,
                 ]}
                 onPress={() => {
-                  toggleTeamStatus(item.id, !isPublic);
-                  setMyTeams([...myTeamState.myTeams]);
+                  toggleTeamStatus(item.id, !isPublic); // ✅ 스토어 함수 호출
                 }}
               >
                 <Text
@@ -191,8 +184,7 @@ export default function MyTeamTab() {
             {!isFull && (
               <TouchableOpacity
                 onPress={() => {
-                  simulateJoinMember(item.id);
-                  setMyTeams([...myTeamState.myTeams]);
+                  simulateJoinMember(item.id); // ✅ 스토어 함수 호출
                 }}
                 style={{ marginTop: 10 }}
               >
@@ -217,9 +209,8 @@ export default function MyTeamTab() {
         </TouchableOpacity>
       </View>
 
-      {/* 상단 배너 (버튼 2개) */}
+      {/* 상단 배너 */}
       <View style={styles.bannerContainer}>
-        {/* (1) 초대코드 입력 버튼 */}
         <TouchableOpacity
           style={[styles.bannerBtn, styles.bannerBtnGray]}
           onPress={() => setJoinModalVisible(true)}
@@ -228,7 +219,6 @@ export default function MyTeamTab() {
           <Text style={styles.bannerTextGray}>코드 입력</Text>
         </TouchableOpacity>
 
-        {/* (2) 방 만들기 버튼 */}
         <TouchableOpacity
           style={[styles.bannerBtn, styles.bannerBtnBlue]}
           onPress={() => router.push("/write")}
@@ -251,7 +241,7 @@ export default function MyTeamTab() {
         }
       />
 
-      {/* 🌟 [모달 1] 보낸 신청 내역 */}
+      {/* 모달 1: 신청 내역 */}
       <Modal
         visible={historyVisible}
         animationType="slide"
@@ -293,7 +283,7 @@ export default function MyTeamTab() {
         </View>
       </Modal>
 
-      {/* 🌟 [모달 2] 초대코드 입력 */}
+      {/* 모달 2: 초대코드 입력 */}
       <Modal
         visible={joinModalVisible}
         transparent={true}
@@ -338,6 +328,7 @@ export default function MyTeamTab() {
 }
 
 const styles = StyleSheet.create({
+  // 스타일은 기존과 동일하므로 그대로 유지하면 됩니다.
   container: { flex: 1, backgroundColor: "#F5F7FB" },
   header: {
     paddingTop: 60,
@@ -349,8 +340,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   headerTitle: { fontSize: 24, fontWeight: "bold" },
-
-  // 상단 배너 스타일
   bannerContainer: {
     flexDirection: "row",
     paddingHorizontal: 20,
@@ -379,8 +368,6 @@ const styles = StyleSheet.create({
   },
   bannerTextBlue: { color: "#3288FF", fontWeight: "bold" },
   bannerTextGray: { color: "#666", fontWeight: "bold" },
-
-  // 팀 카드 스타일
   card: {
     backgroundColor: "#fff",
     borderRadius: 16,
@@ -405,8 +392,6 @@ const styles = StyleSheet.create({
   textBlack: { color: "#333" },
   title: { fontSize: 18, fontWeight: "bold", marginBottom: 5 },
   info: { fontSize: 14, color: "#555" },
-
-  // 디테일 섹션
   detailSection: { marginTop: 10 },
   divider: { height: 1, backgroundColor: "#eee", marginVertical: 15 },
   manageRow: {
@@ -417,7 +402,6 @@ const styles = StyleSheet.create({
   manageBtn: { flexDirection: "row", alignItems: "center", gap: 5, padding: 5 },
   manageText: { fontSize: 14, color: "#666", fontWeight: "bold" },
   verticalLine: { width: 1, height: 20, backgroundColor: "#eee" },
-
   actionButton: {
     marginTop: 15,
     padding: 15,
@@ -432,11 +416,8 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   sectionTitle: { fontSize: 14, fontWeight: "bold", marginTop: 10 },
-
   emptyContainer: { alignItems: "center", marginTop: 50 },
   emptyText: { color: "#999" },
-
-  // 모달 1: 신청 내역
   modalContainer: { flex: 1, backgroundColor: "#F5F7FB" },
   modalHeader: {
     padding: 20,
@@ -469,8 +450,6 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     marginTop: 5,
   },
-
-  // 모달 2: 초대코드 입력
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",

@@ -1,4 +1,4 @@
-// app/post/[id].tsx
+// 파일: app/post/[id].tsx
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import {
@@ -10,17 +10,18 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-// 경로 확인 (store에서 데이터 가져오기)
-import { posts, myTeamState, sendMatchRequest } from "../../store";
+
+// ✅ 1. useStore 훅 가져오기 (레거시 store.ts 아님!)
+import { useStore, Team } from "../../store/useStore";
 
 export default function PostDetail() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
 
-  // 1. URL로 넘어온 id로 상대방 팀 정보 찾기
-  const targetPost = posts.find((p) => p.id.toString() === id);
+  // ✅ 2. 훅에서 필요한 데이터와 함수를 한 번에 꺼냅니다.
+  const { posts, myTeams, sendMatchRequest } = useStore();
 
-  // 2. 내 팀 선택 모달 상태
+  const targetPost = posts.find((p) => p.id.toString() === id);
   const [modalVisible, setModalVisible] = useState(false);
 
   if (!targetPost) {
@@ -31,31 +32,27 @@ export default function PostDetail() {
     );
   }
 
-  // 3. 신청 버튼 눌렀을 때 로직
   const handlePressRequest = () => {
-    // 내 팀이 하나도 없으면?
-    if (myTeamState.myTeams.length === 0) {
+    // ✅ 3. myTeams (Zustand State) 사용
+    if (myTeams.length === 0) {
       Alert.alert("팀이 없어요!", "먼저 [내 팀] 탭에서 팀을 만들어주세요.");
       return;
     }
-    // 팀이 있으면 모달 열어서 선택하게 함
     setModalVisible(true);
   };
 
-  // 4. 진짜 전송 (내 팀 선택 완료)
-  const confirmRequest = (myTeam: any) => {
-    setModalVisible(false); // 모달 닫기
+  const confirmRequest = (myTeam: Team) => {
+    setModalVisible(false);
 
-    // 인원수 체크 (예: 3:3 미팅인데 2명 팀으로 신청하면?)
     if (myTeam.count !== targetPost.count) {
       Alert.alert(
         "인원수 불일치",
-        `상대방은 ${targetPost.count}명을 원해요! (우리팀: ${myTeam.count}명)`
+        `상대방은 ${targetPost.count}명을 원해요! (우리팀: ${myTeam.count}명)`,
       );
       return;
     }
 
-    // 스토어 함수 호출
+    // ✅ 4. sendMatchRequest (Zustand Action) 호출
     const success = sendMatchRequest(myTeam.id, targetPost.id);
 
     if (success) {
@@ -67,7 +64,6 @@ export default function PostDetail() {
 
   return (
     <View style={styles.container}>
-      {/* --- 게시글 내용 --- */}
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
           <Text style={styles.dept}>{targetPost.dept}</Text>
@@ -92,7 +88,6 @@ export default function PostDetail() {
         <Text style={styles.content}>{targetPost.content}</Text>
       </ScrollView>
 
-      {/* --- 하단 고정 신청 버튼 --- */}
       <View style={styles.footer}>
         <TouchableOpacity
           style={styles.requestButton}
@@ -102,7 +97,6 @@ export default function PostDetail() {
         </TouchableOpacity>
       </View>
 
-      {/* --- 🌟 [모달] 내 팀 선택하기 --- */}
       <Modal
         visible={modalVisible}
         transparent={true}
@@ -113,11 +107,11 @@ export default function PostDetail() {
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>어떤 팀으로 신청할까요?</Text>
             <Text style={styles.modalSub}>
-              우리 팀 목록 ({myTeamState.myTeams.length}개)
+              우리 팀 목록 ({myTeams.length}개)
             </Text>
 
             <ScrollView style={{ maxHeight: 300 }}>
-              {myTeamState.myTeams.map((team) => (
+              {myTeams.map((team) => (
                 <TouchableOpacity
                   key={team.id}
                   style={styles.teamSelectCard}
@@ -152,7 +146,6 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#fff" },
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
   scrollContent: { padding: 20, paddingBottom: 100 },
-
   header: { marginBottom: 20, marginTop: 40 },
   dept: { color: "#3288FF", fontWeight: "bold", marginBottom: 5 },
   title: { fontSize: 24, fontWeight: "bold", marginBottom: 10 },
@@ -165,7 +158,6 @@ const styles = StyleSheet.create({
     color: "#666",
     fontSize: 12,
   },
-
   infoBox: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -175,9 +167,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   infoText: { fontSize: 14, fontWeight: "bold", color: "#333" },
-
   content: { fontSize: 16, lineHeight: 24, color: "#333" },
-
   footer: {
     position: "absolute",
     bottom: 0,
@@ -195,8 +185,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   reqBtnText: { color: "#fff", fontSize: 18, fontWeight: "bold" },
-
-  // 모달 스타일
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
@@ -211,7 +199,6 @@ const styles = StyleSheet.create({
   },
   modalTitle: { fontSize: 20, fontWeight: "bold", marginBottom: 5 },
   modalSub: { fontSize: 14, color: "#888", marginBottom: 20 },
-
   teamSelectCard: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -225,7 +212,6 @@ const styles = StyleSheet.create({
   teamSelectTitle: { fontSize: 16, fontWeight: "bold", marginBottom: 2 },
   teamSelectInfo: { fontSize: 12, color: "#666" },
   selectArrow: { color: "#3288FF", fontWeight: "bold" },
-
   closeBtn: { marginTop: 10, padding: 15, alignItems: "center" },
   closeText: { color: "#666", fontWeight: "bold" },
 });
