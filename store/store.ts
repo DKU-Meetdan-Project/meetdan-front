@@ -1,7 +1,7 @@
 // app/store.ts
 
 // 1. 내 팀 상태 관리 (신청 내역 sentRequests 추가됨)
-export const myTeamState = {
+/*export const myTeamState = {
   myTeams: [] as any[],
   sentRequests: [] as any[], // ✅ 에러 해결: 이 줄이 없어서 에러가 났던 겁니다!
 };
@@ -130,3 +130,4 @@ export const sendMatchRequest = (myTeamId: number, targetTeamId: number) => {
 
   return true;
 };
+*/

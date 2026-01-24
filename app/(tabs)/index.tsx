@@ -9,18 +9,19 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { posts } from "../../store"; // store에서 데이터 가져오기
+import { useStore } from "../../store/useStore"; // store에서 데이터 가져오기
 
 export default function HomeTab() {
   const router = useRouter();
   const [data, setData] = useState<any[]>([]);
+  const { posts, addPost } = useStore();
 
   // 화면이 포커스될 때마다 데이터 새로고침 (ACTIVE인 글만)
   useFocusEffect(
     useCallback(() => {
       const activePosts = posts.filter((p) => p.status === "ACTIVE");
       setData([...activePosts]);
-    }, [])
+    }, []),
   );
 
   const renderItem = ({ item }: { item: any }) => {
