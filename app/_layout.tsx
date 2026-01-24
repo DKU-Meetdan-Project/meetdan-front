@@ -1,65 +1,62 @@
-import {
-  DarkTheme,
-  DefaultTheme,
-  ThemeProvider,
-} from "@react-navigation/native";
+// 파일: app/_layout.tsx
 import { useFonts } from "expo-font";
-import { Stack, useRouter, useSegments } from "expo-router"; // ✅ useSegments 추가
+import {
+  Stack,
+  useRouter,
+  useSegments,
+  useRootNavigationState,
+} from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
-import { View, ActivityIndicator } from "react-native";
-import "react-native-reanimated";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { ActivityIndicator, View } from "react-native";
 
-import { useColorScheme } from "@/hooks/use-color-scheme";
-import { AuthService } from "@/utils/auth";
+// ✅ 방금 만든 파일 import
+import * as AuthService from "../utils/auth";
 
-// 스플래시 스크린 자동 숨김 방지
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
-
-  // 폰트 로딩 (에러 나면 일단 주석 처리 하셨죠?)
-  const [loaded] = [true]; /*useFonts({
+  const [loaded] = [true]; /* useFonts({
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
-  });*/
+  }); */
 
-  const [isReady, setIsReady] = useState(false);
   const router = useRouter();
-  const segments = useSegments(); // ✅ 현재 내가 어느 화면에 있는지 파악
+  const segments = useSegments();
+  const navigationState = useRootNavigationState();
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    // 폰트 로딩 전이면 실행 안 함
-    if (!loaded) return;
+    if (!loaded || !navigationState?.key) return;
 
     const checkLoginStatus = async () => {
-      const token = await AuthService.getToken();
-      const inAuthGroup = segments[0] === "login"; // 현재 화면이 로그인 화면인가?
+      const token = await AuthService.getToken(); // ✅ 이제 에러 안 남
+
+      const inAuthGroup = segments[0] === "login";
+
+      // ✅ [수정] 타입스크립트 에러 해결 (as string[])
+      // "segments가 비어있을 수도 있으니까 string 배열로 취급해줘"라고 명시
+      const inRoot = (segments as string[]).length === 0;
 
       console.log(
-        `[AuthCheck] 토큰: ${token ? "있음" : "없음"} / 현재위치: ${segments[0] || "root"}`,
+        `[AuthCheck] 토큰: ${token ? "있음" : "없음"} / 위치: ${inRoot ? "root" : segments[0]}`,
       );
 
-      // 🚨 무한루프 방지 로직
-      if (token && inAuthGroup) {
-        // 1. 토큰이 있는데 로그인 화면이다? -> 메인으로 내쫓음
+      if (token && (inAuthGroup || inRoot)) {
         router.replace("/(tabs)");
       } else if (!token && !inAuthGroup) {
-        // 2. 토큰이 없는데 로그인 화면이 아니다? -> 로그인으로 내쫓음
         router.replace("/login");
       }
-      // 3. (중요) 토큰 없고 이미 로그인 화면이면? -> 아무것도 안 함 (가만히 둠)
 
       setIsReady(true);
       await SplashScreen.hideAsync();
     };
 
     checkLoginStatus();
-  }, [loaded, segments]); // ✅ segments가 바뀔 때마다 검사
+  }, [loaded, navigationState?.key]);
 
-  // 로딩 중일 때
   if (!loaded || !isReady) {
+    // 로딩 중일 때 빈 화면 대신 스피너 보여주기
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
         <ActivityIndicator size="large" color="#3288FF" />
@@ -68,14 +65,13 @@ export default function RootLayout() {
   }
 
   return (
-    <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+    <GestureHandlerRootView style={{ flex: 1 }}>
       <Stack>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="login" options={{ headerShown: false }} />
-        {/* +not-found 에러 뜨면 아래 줄 지우세요. 파일이 없어서 나는 경고입니다. */}
         <Stack.Screen name="+not-found" />
       </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }

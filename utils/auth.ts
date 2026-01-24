@@ -1,38 +1,42 @@
-// utils/auth.ts
+// 파일: utils/auth.ts
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { router } from "expo-router";
 
-const TOKEN_KEY = "user_auth_token";
+const TOKEN_KEY = "user-token";
 
-export const AuthService = {
-  // 1. 로그인 성공 시 토큰 저장 & 메인 이동
-  login: async (token: string) => {
-    try {
-      await AsyncStorage.setItem(TOKEN_KEY, token);
-      console.log("🔑 토큰 저장 완료");
-      router.replace("/(tabs)");
-    } catch (e) {
-      console.error("토큰 저장 실패", e);
-    }
-  },
+// ✅ 토큰 가져오기 (이 함수가 없어서 에러가 났던 겁니다)
+export const getToken = async () => {
+  try {
+    return await AsyncStorage.getItem(TOKEN_KEY);
+  } catch (e) {
+    return null;
+  }
+};
 
-  // 2. 로그아웃 (토큰 삭제 & 로그인화면 이동)
-  logout: async () => {
-    try {
-      await AsyncStorage.removeItem(TOKEN_KEY);
-      console.log("🔒 로그아웃");
-      router.replace("/login");
-    } catch (e) {
-      console.error("로그아웃 실패", e);
-    }
-  },
+// ✅ 로그인 시 토큰 저장
+export const saveToken = async (token: string) => {
+  try {
+    await AsyncStorage.setItem(TOKEN_KEY, token);
+  } catch (e) {
+    console.error("토큰 저장 실패", e);
+  }
+};
 
-  // 3. 토큰 가져오기 (API 호출 때 사용)
-  getToken: async () => {
-    try {
-      return await AsyncStorage.getItem(TOKEN_KEY);
-    } catch (e) {
-      return null;
-    }
-  },
+// ✅ 로그아웃 시 토큰 삭제
+export const removeToken = async () => {
+  try {
+    await AsyncStorage.removeItem(TOKEN_KEY);
+  } catch (e) {
+    console.error("토큰 삭제 실패", e);
+  }
+};
+
+// (테스트용) 가짜 로그인 함수
+export const login = async (email: string) => {
+  // 실제 서버 통신 대신 무조건 성공 처리
+  if (email.includes("dankook.ac.kr")) {
+    const fakeToken = "abc-123-fake-token";
+    await saveToken(fakeToken);
+    return true;
+  }
+  return false;
 };

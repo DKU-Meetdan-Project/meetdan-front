@@ -13,8 +13,8 @@ import {
 } from "react-native";
 
 // ✅ 공통 컴포넌트 불러오기 (경로가 다르면 수정해주세요!)
-import { InputBox } from "../../components/ui/InputBox";
-import { MainButton } from "../../components/ui/MainButton";
+import { InputBox } from "../../components/InputBox";
+import { MainButton } from "../../components/MainButton";
 
 export default function ProfileTab() {
   const router = useRouter();
@@ -24,7 +24,7 @@ export default function ProfileTab() {
   const [nickname, setNickname] = useState("코딩하는 곰 🐻");
   const [major, setMajor] = useState("단국대학교 소프트웨어학과");
   const [profileImage, setProfileImage] = useState(
-    "https://avatar.iran.liara.run/public/boy?username=Me"
+    "https://avatar.iran.liara.run/public/boy?username=Me",
   );
 
   // 수정 모드 토글

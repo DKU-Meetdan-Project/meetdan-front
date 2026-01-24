@@ -1,3 +1,4 @@
+// 파일: app/edit/[id].tsx
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState, useEffect } from "react";
 import {
@@ -9,41 +10,44 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { myTeamState, updateTeam } from "../../store"; // store 경로 확인!
+import { useStore } from "../../store/useStore"; // ✅ 경로 확인
 
 export default function EditTeam() {
-  const { id } = useLocalSearchParams(); // URL에서 팀 ID 꺼내기
+  const { id } = useLocalSearchParams();
   const router = useRouter();
 
-  // 입력값 상태들
+  // ✅ [수정] Zustand 훅에서 데이터와 함수 꺼내오기
+  const { myTeams, updateTeam } = useStore();
+
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [age, setAge] = useState("");
 
-  // 화면이 열리면 기존 데이터 채워넣기
+  // 화면 열리면 데이터 채우기
   useEffect(() => {
-    // ID가 문자열로 넘어오므로 비교를 위해 문자열 변환
-    const team = myTeamState.myTeams.find((t) => t.id.toString() === id);
+    if (!id) return;
+
+    // ✅ [수정] store에서 가져온 myTeams 사용
+    const team = myTeams.find((t) => t.id.toString() === id.toString());
 
     if (team) {
       setTitle(team.title);
-      setContent(team.content || ""); // 소개글 (MBTI 등)
+      setContent(team.content || "");
       setAge(team.age.toString());
     } else {
       Alert.alert("오류", "팀 정보를 찾을 수 없습니다.", [
         { text: "확인", onPress: () => router.back() },
       ]);
     }
-  }, [id]);
+  }, [id, myTeams]); // myTeams가 로드되면 다시 실행
 
-  // 저장 버튼 클릭 시
   const handleUpdate = () => {
     if (!title || !content || !age) {
       Alert.alert("잠깐!", "내용을 모두 입력해주세요.");
       return;
     }
 
-    // store의 updateTeam 함수 호출
+    // ✅ [수정] store의 updateTeam 함수 호출
     updateTeam(Number(id), {
       title,
       content,
@@ -51,13 +55,12 @@ export default function EditTeam() {
     });
 
     Alert.alert("수정 완료! ✨", "팀 정보가 변경되었습니다.", [
-      { text: "확인", onPress: () => router.back() }, // 뒤로 가기 (내 팀 화면으로)
+      { text: "확인", onPress: () => router.back() },
     ]);
   };
 
   return (
     <View style={styles.container}>
-      {/* 헤더 */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()}>
           <Text style={styles.cancelText}>취소</Text>
@@ -69,7 +72,6 @@ export default function EditTeam() {
       </View>
 
       <ScrollView style={styles.formContainer}>
-        {/* 제목 입력 */}
         <Text style={styles.label}>제목 (학과 + 인원)</Text>
         <TextInput
           style={styles.input}
@@ -78,7 +80,6 @@ export default function EditTeam() {
           placeholder="예: 소프트웨어학과 3명"
         />
 
-        {/* 평균 나이 입력 */}
         <Text style={styles.label}>평균 나이</Text>
         <TextInput
           style={styles.input}
@@ -88,7 +89,6 @@ export default function EditTeam() {
           placeholder="23"
         />
 
-        {/* 내용 입력 (MBTI, 어필 등) */}
         <Text style={styles.label}>우리 팀 어필 (MBTI, 주량 등)</Text>
         <TextInput
           style={[styles.input, styles.textArea]}

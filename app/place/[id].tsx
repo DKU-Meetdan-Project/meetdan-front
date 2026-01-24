@@ -1,4 +1,4 @@
-// 파일 경로: app/place/[id].tsx
+// 파일: app/place/[id].tsx
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
@@ -15,11 +15,46 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { places } from "../../store"; // ✅ store 데이터 가져오기
+
+// ✅ 1. 데이터 직접 정의 (DB가 없으므로 여기에 둡니다)
+const places = [
+  {
+    id: "1",
+    name: "단국포차",
+    desc: "안주가 맛있는 감성 포차",
+    benefit: "소주 1병 서비스",
+    distance: "150m",
+    image: "https://via.placeholder.com/300",
+    phone: "031-123-4567",
+    bestMenu: ["치즈 계란말이", "나가사키 짬뽕", "오돌뼈"],
+  },
+  {
+    id: "2",
+    name: "죽전 회관",
+    desc: "학생증 제시 시 사이즈 업",
+    benefit: "음료수 무한리필",
+    distance: "300m",
+    image: "https://via.placeholder.com/300",
+    phone: "031-987-6543",
+    bestMenu: ["삼겹살", "된장찌개", "비빔냉면"],
+  },
+  {
+    id: "3",
+    name: "코인 노래방",
+    desc: "시설 좋은 럭셔리 코노",
+    benefit: "1곡 서비스",
+    distance: "50m",
+    image: "https://via.placeholder.com/300",
+    phone: "010-0000-0000",
+    bestMenu: ["최신식 음향", "넓은 룸"],
+  },
+];
 
 export default function PlaceDetail() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
+
+  // ✅ 2. 이제 places 배열이 있으므로 에러가 안 납니다.
   const place = places.find((p) => p.id === id);
 
   const [modalVisible, setModalVisible] = useState(false);
@@ -28,7 +63,7 @@ export default function PlaceDetail() {
 
   if (!place)
     return (
-      <View>
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
         <Text>존재하지 않는 가게입니다.</Text>
       </View>
     );
@@ -108,8 +143,7 @@ export default function PlaceDetail() {
         </TouchableOpacity>
       </View>
 
-      {/* ---- 모달들은 places.tsx에서 가져옴 (코드 재사용) ---- */}
-      {/* 1. 입력 모달 */}
+      {/* 모달: 코드 입력 */}
       <Modal visible={modalVisible} transparent animationType="fade">
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -142,7 +176,7 @@ export default function PlaceDetail() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* 2. 성공 모달 */}
+      {/* 모달: 성공 */}
       <Modal visible={successVisible} animationType="slide">
         <View style={styles.successContainer}>
           <Ionicons name="checkmark-circle" size={100} color="#3288FF" />
@@ -246,7 +280,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   actionButtonText: { color: "#fff", fontSize: 18, fontWeight: "bold" },
-  // 모달 스타일 (아까와 동일)
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
@@ -285,7 +318,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   confirmBtnText: { color: "#fff", fontWeight: "bold" },
-  // 성공 스타일
   successContainer: {
     flex: 1,
     backgroundColor: "#fff",

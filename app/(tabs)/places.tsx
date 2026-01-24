@@ -9,19 +9,51 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { places } from "../../store"; // ✅ store 경로 확인 (../../store 또는 ../../constants/store)
+
+// 🚨 [수정 포인트 1] import { places } ... 삭제! (파일 내부에 직접 정의함)
+
+// ✅ [수정 포인트 2] 잃어버린 places 데이터 복구
+const places = [
+  {
+    id: "1",
+    name: "단국포차",
+    desc: "안주가 맛있는 감성 포차",
+    benefit: "소주 1병 서비스",
+    distance: "150m",
+    image: "https://via.placeholder.com/300", // 실제 이미지 URL로 나중에 바꾸세요
+  },
+  {
+    id: "2",
+    name: "죽전 회관",
+    desc: "학생증 제시 시 사이즈 업",
+    benefit: "음료수 무한리필",
+    distance: "300m",
+    image: "https://via.placeholder.com/300",
+  },
+  {
+    id: "3",
+    name: "코인 노래방",
+    desc: "시설 좋은 럭셔리 코노",
+    benefit: "1곡 서비스",
+    distance: "50m",
+    image: "https://via.placeholder.com/300",
+  },
+];
 
 export default function PlacesTab() {
   const router = useRouter();
 
   const renderItem = ({ item }: { item: any }) => (
-    // 클릭 시 상세 페이지로 이동!
     <TouchableOpacity
       style={styles.card}
-      onPress={() => router.push(`/place/${item.id}` as any)} // 👈 경로 변경
+      onPress={() => router.push(`/place/${item.id}` as any)}
       activeOpacity={0.9}
     >
-      <Image source={{ uri: item.image }} style={styles.image} />
+      <Image
+        source={{ uri: item.image }}
+        style={styles.image}
+        resizeMode="cover" // 이미지 꽉 차게
+      />
       <View style={styles.overlay} />
 
       <View style={styles.textContainer}>
@@ -84,11 +116,16 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     height: 250,
     elevation: 5,
+    // iOS 그림자
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
   },
   image: { width: "100%", height: "100%", position: "absolute" },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.3)",
+    backgroundColor: "rgba(0,0,0,0.4)", // 글씨 잘 보이게 조금 더 어둡게 수정
   },
   textContainer: { flex: 1, justifyContent: "flex-end", padding: 20 },
   topRow: {

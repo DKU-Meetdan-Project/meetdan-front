@@ -1,3 +1,4 @@
+// 파일: app/write.tsx
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
@@ -10,21 +11,25 @@ import {
   View,
   ActivityIndicator,
 } from "react-native";
-// store에서 팀 추가 함수 가져오기 (경로 점 하나 '.' 확인!)
-import { addTeam } from "../store";
+
+// ✅ [수정 1] store의 useStore 훅 가져오기
+import { useStore, Team } from "../store/useStore";
 
 export default function Write() {
   const router = useRouter();
 
-  // 👇 [핵심] 이 변수 선언들이 없어서 에러가 난 겁니다!
+  // ✅ [수정 2] useStore에서 '내 팀에 추가하는 함수(joinTeam)' 가져오기
+  // (이름은 joinTeam이지만 "내 팀 목록에 넣는다"는 기능은 똑같습니다)
+  const { joinTeam } = useStore();
+
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [age, setAge] = useState("");
-  const [count, setCount] = useState(3); // 기본 3명
+  const [count, setCount] = useState(3);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async () => {
-    // 1. 유효성 검사 (빈칸 막기)
+    // 1. 유효성 검사
     if (!title || !content || !age) {
       Alert.alert("잠깐!", "제목, 내용, 나이를 모두 입력해주세요.");
       return;
@@ -33,32 +38,38 @@ export default function Write() {
     setIsSubmitting(true);
 
     try {
-      // 2. 저장할 데이터 뭉치기
-      const newTeamPayload = {
-        title: title, // 이제 변수가 있어서 에러 안 남!
+      // ✅ [수정 3] Team 객체 완벽하게 조립하기
+      // (store.ts가 없으므로 여기서 id랑 코드를 만들어줘야 함)
+      const newTeam: Team = {
+        id: Date.now(), // 고유 ID 생성
+        title: title,
         content: content,
         age: parseInt(age),
         count: count,
+        currentCount: 1, // 방장이니까 1명부터 시작
         dept: "소프트웨어학과", // (나중에 로그인 정보로 대체)
         gender: "M", // (나중에 로그인 정보로 대체)
+        campus: "죽전",
         tags: ["#신규", "#설렘"],
-        // status는 store에서 자동으로 'RECRUITING'(모집중)으로 설정됨
+        status: "RECRUITING", // 모집중 상태
+        timestamp: "방금 전",
+        inviteCode: Math.random().toString(36).substring(2, 8).toUpperCase(), // 랜덤 초대코드 생성 (예: X7A9Z)
+        members: [{ name: "나(팀장)", role: "LEADER" }],
       };
 
-      // 3. 스토어에 방 생성 요청
-      addTeam(newTeamPayload);
+      // 2. 스토어에 저장 (Zustand)
+      joinTeam(newTeam);
 
-      // 4. 성공 알림 및 이동
+      // 3. 성공 알림 및 이동
       Alert.alert(
         "방 생성 완료! 🏠",
         "내 팀 관리 탭에서 초대 코드를 확인하세요.",
         [
           {
             text: "확인",
-            // 탭 폴더 안에 my_team이 있으니 경로 주의
             onPress: () => router.replace("/(tabs)/my_team"),
           },
-        ]
+        ],
       );
     } catch (error) {
       Alert.alert("오류", "방 생성 중 문제가 발생했습니다.");
