@@ -1,6 +1,7 @@
 // 파일: app/login.tsx
 import { useRouter } from "expo-router";
 import { useState } from "react";
+import MeetDanLogo from "../components/Logo";
 import {
   Alert,
   StyleSheet,
@@ -69,6 +70,9 @@ export default function Login() {
   return (
     <View style={styles.container}>
       <View style={styles.formArea}>
+        <View style={{ alignItems: "center", marginBottom: 30 }}>
+          <MeetDanLogo size={150} showText={true} />
+        </View>
         <Text style={styles.title}>로그인</Text>
         <Text style={styles.subtitle}>단국대 포털 계정으로 로그인하세요</Text>
 
@@ -97,7 +101,7 @@ export default function Login() {
           onPress={() => router.back()}
           style={{ marginTop: 20, alignSelf: "center" }}
         >
-          <Text style={{ color: "#999" }}>이전 화면으로</Text>
+          <Text style={{ color: "#999" }}>회원가입</Text>
         </TouchableOpacity>
       </View>
     </View>

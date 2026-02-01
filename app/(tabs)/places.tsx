@@ -16,15 +16,15 @@ import {
 const places = [
   {
     id: "1",
-    name: "단국포차",
-    desc: "안주가 맛있는 감성 포차",
+    name: "낭만단대",
+    desc: "안주가 맛있는 감성 술집",
     benefit: "소주 1병 서비스",
     distance: "150m",
     image: "https://via.placeholder.com/300", // 실제 이미지 URL로 나중에 바꾸세요
   },
   {
     id: "2",
-    name: "죽전 회관",
+    name: "단국신화",
     desc: "학생증 제시 시 사이즈 업",
     benefit: "음료수 무한리필",
     distance: "300m",
@@ -32,9 +32,9 @@ const places = [
   },
   {
     id: "3",
-    name: "코인 노래방",
-    desc: "시설 좋은 럭셔리 코노",
-    benefit: "1곡 서비스",
+    name: "혜자",
+    desc: "숙주볶음에 라면사리 추가 맛있음",
+    benefit: "라면 사리 서비스",
     distance: "50m",
     image: "https://via.placeholder.com/300",
   },

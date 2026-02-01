@@ -9,69 +9,91 @@ import {
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { ActivityIndicator, View } from "react-native";
+import { View, StyleSheet } from "react-native";
+// ❌ Animated는 삭제했습니다!
 
-// ✅ 방금 만든 파일 import
 import * as AuthService from "../utils/auth";
+import MeetDanLogo from "@/components/Logo";
 
+// 앱이 로딩될 때까지 네이티브 화면 유지 (우리가 수동으로 끌 것임)
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
-  const [loaded] = [true]; /* useFonts({
-    SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
-  }); */
-
+  const [loaded] = [true]; // 폰트 로딩 (가정)
   const router = useRouter();
   const segments = useSegments();
   const navigationState = useRootNavigationState();
+
+  // ✅ isReady가 false면: 로고 화면 보여줌
+  // ✅ isReady가 true면: 메인 화면 보여줌
   const [isReady, setIsReady] = useState(false);
 
+  // 1️⃣ 앱 켜지자마자 "흰색 네이티브 화면"은 바로 치워버리기
+  // 그래야 뒤에 있는 "우리 로고"가 바로 보입니다.
+  useEffect(() => {
+    SplashScreen.hideAsync();
+  }, []);
+
+  // 2️⃣ 로그인 체크 및 라우팅 로직
   useEffect(() => {
     if (!loaded || !navigationState?.key) return;
 
     const checkLoginStatus = async () => {
-      const token = await AuthService.getToken(); // ✅ 이제 에러 안 남
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 2000)); // 💤 인위적 딜레이 (로고 감상용)
+        const token = await AuthService.getToken();
+        const inAuthGroup = segments[0] === "login";
+        const inRoot = (segments as string[]).length === 0;
 
-      const inAuthGroup = segments[0] === "login";
-
-      // ✅ [수정] 타입스크립트 에러 해결 (as string[])
-      // "segments가 비어있을 수도 있으니까 string 배열로 취급해줘"라고 명시
-      const inRoot = (segments as string[]).length === 0;
-
-      console.log(
-        `[AuthCheck] 토큰: ${token ? "있음" : "없음"} / 위치: ${inRoot ? "root" : segments[0]}`,
-      );
-
-      if (token && (inAuthGroup || inRoot)) {
-        router.replace("/(tabs)");
-      } else if (!token && !inAuthGroup) {
-        router.replace("/login");
+        // 로그인 여부에 따라 납치
+        if (token && (inAuthGroup || inRoot)) {
+          router.replace("/(tabs)");
+        } else if (!token && !inAuthGroup) {
+          router.replace("/login");
+        }
+      } catch (e) {
+        console.error("초기화 에러:", e);
+      } finally {
+        // ✅ 로직이 끝나면 로고 화면 끄기!
+        setIsReady(true);
       }
-
-      setIsReady(true);
-      await SplashScreen.hideAsync();
     };
 
     checkLoginStatus();
+
+    // 🛡️ 안전장치: 혹시라도 로직이 꼬이면 1.5초 뒤에 강제로 문 열기
+    const timer = setTimeout(() => setIsReady(true), 1500);
+    return () => clearTimeout(timer);
   }, [loaded, navigationState?.key]);
 
-  if (!loaded || !isReady) {
-    // 로딩 중일 때 빈 화면 대신 스피너 보여주기
-    return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-        <ActivityIndicator size="large" color="#3288FF" />
-      </View>
-    );
-  }
+  if (!loaded) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="index" options={{ headerShown: false }} />
-        <Stack.Screen name="login" options={{ headerShown: false }} />
+      {/* 1. 메인 앱 화면 (평소엔 여기 보임) */}
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="index" />
+        <Stack.Screen name="login" />
         <Stack.Screen name="+not-found" />
       </Stack>
+
+      {/* 2. 커스텀 스플래쉬 화면 (isReady가 false일 때만 덮어씌움) */}
+      {!isReady && (
+        <View style={styles.splashContainer}>
+          <MeetDanLogo size={150} showText={true} />
+        </View>
+      )}
     </GestureHandlerRootView>
   );
 }
+
+const styles = StyleSheet.create({
+  splashContainer: {
+    ...StyleSheet.absoluteFillObject, // 화면 전체 꽉 채우기
+    backgroundColor: "#ffffff", // 배경색
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 9999, // 다른 화면보다 무조건 위에 뜨게
+  },
+});
