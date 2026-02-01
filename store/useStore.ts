@@ -73,7 +73,7 @@ export const useStore = create<AppState>((set, get) => ({
       age: 22,
       timestamp: "방금 전",
       tags: ["#술찌", "#맛집탐방"],
-      members: [{ name: "김민지", role: "LEADER" }],
+      members: [{ name: "배수지", role: "LEADER" }],
     },
     {
       id: 2,
@@ -92,7 +92,7 @@ export const useStore = create<AppState>((set, get) => ({
     },
     {
       id: 300,
-      title: "컴공 코딩 기계들",
+      title: "소웨 코딩 기계들",
       campus: "죽전",
       dept: "소프트웨어학과",
       gender: "M",
@@ -103,7 +103,7 @@ export const useStore = create<AppState>((set, get) => ({
       age: 23,
       timestamp: "30분 전",
       tags: ["#너드남", "#안경씀", "#체크남방"],
-      members: [{ name: "이코딩", role: "LEADER" }],
+      members: [{ name: "고경수", role: "LEADER" }],
     },
   ],
 
