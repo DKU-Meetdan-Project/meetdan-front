@@ -85,10 +85,10 @@ export default function Login() {
 
         {/* 뒤로가기 (임시) */}
         <TouchableOpacity
-          onPress={() => router.back()}
-          style={{ marginTop: 20 }}
+          onPress={() => router.push("/auth/signup")}
+          style={{ marginTop: 20, alignSelf: "center" }}
         >
-          <Text style={{ color: "#999" }}>이전 화면으로</Text>
+          <Text style={{ color: "#999" }}>회원가입</Text>
         </TouchableOpacity>
       </View>
     </View>
