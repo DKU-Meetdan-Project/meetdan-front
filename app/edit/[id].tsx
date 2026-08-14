@@ -3,15 +3,14 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState, useEffect } from "react";
 import {
   Alert,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  KeyboardAvoidingView,
   Platform,
   View,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { useStore } from "../../store/useStore"; // ✅ 경로 확인
 
 export default function EditTeam() {
@@ -62,61 +61,62 @@ export default function EditTeam() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-    >
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()}>
-            <Text style={styles.cancelText}>취소</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>팀 정보 수정</Text>
-          <TouchableOpacity onPress={handleUpdate}>
-            <Text style={styles.submitText}>완료</Text>
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView
-          style={styles.formContainer}
-          contentContainerStyle={{ paddingBottom: 100 }}
-        >
-          <Text style={styles.label}>제목 (학과 + 인원)</Text>
-          <TextInput
-            style={styles.input}
-            value={title}
-            onChangeText={setTitle}
-            placeholder="예: 소프트웨어학과 3명"
-          />
-
-          <Text style={styles.label}>평균 나이</Text>
-          <TextInput
-            style={styles.input}
-            value={age}
-            onChangeText={setAge}
-            keyboardType="number-pad"
-            placeholder="23"
-          />
-
-          <Text style={styles.label}>우리 팀 어필 (MBTI, 주량 등)</Text>
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            value={content}
-            onChangeText={setContent}
-            multiline={true}
-            placeholder="MBTI랑 좋아하는 술 스타일 적어주세요!"
-          />
-          <Text style={styles.hint}>
-            * 여기서 내용을 수정하면 상세 페이지에 바로 반영됩니다.
-          </Text>
-        </ScrollView>
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()}>
+          <Text style={styles.cancelText}>취소</Text>
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>팀 정보 수정</Text>
+        <TouchableOpacity onPress={handleUpdate}>
+          <Text style={styles.submitText}>완료</Text>
+        </TouchableOpacity>
       </View>
-    </KeyboardAvoidingView>
+
+      <KeyboardAwareScrollView
+        style={styles.flex}
+        contentContainerStyle={[styles.formContainer, { paddingBottom: 100 }]}
+        enableOnAndroid
+        extraScrollHeight={Platform.OS === "ios" ? 20 : 40}
+        enableAutomaticScroll
+        keyboardOpeningTime={0}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Text style={styles.label}>제목 (학과 + 인원)</Text>
+        <TextInput
+          style={styles.input}
+          value={title}
+          onChangeText={setTitle}
+          placeholder="예: 소프트웨어학과 3명"
+        />
+
+        <Text style={styles.label}>평균 나이</Text>
+        <TextInput
+          style={styles.input}
+          value={age}
+          onChangeText={setAge}
+          keyboardType="number-pad"
+          placeholder="23"
+        />
+
+        <Text style={styles.label}>우리 팀 어필 (MBTI, 주량 등)</Text>
+        <TextInput
+          style={[styles.input, styles.textArea]}
+          value={content}
+          onChangeText={setContent}
+          multiline={true}
+          placeholder="MBTI랑 좋아하는 술 스타일 적어주세요!"
+        />
+        <Text style={styles.hint}>
+          * 여기서 내용을 수정하면 상세 페이지에 바로 반영됩니다.
+        </Text>
+      </KeyboardAwareScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#fff" },
+  flex: { flex: 1 },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",

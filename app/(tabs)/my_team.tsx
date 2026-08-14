@@ -6,25 +6,43 @@ import {
   Alert,
   FlatList,
   Modal,
+  Pressable,
   StyleSheet,
   Text,
-  TouchableOpacity,
-  View,
   TextInput,
+  View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-// ✅ [핵심 변경] store 폴더의 store.ts가 아니라 useStore.ts를 가져옵니다.
+import { Badge, BadgeTone } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PressScale } from "@/components/ui/press-scale";
+import { Screen, ScreenHeader } from "@/components/ui/screen";
+import {
+  Colors,
+  Hairline,
+  Palette,
+  Radius,
+  Shadow,
+  Spacing,
+  Typo,
+} from "@/constants/theme";
 import { useStore, Team } from "../../store/useStore";
+
+/** 팀 상태를 뱃지 문구/색으로 한 번에 정리 */
+function teamStatus(team: Team): { label: string; tone: BadgeTone } {
+  if (team.status === "ACTIVE") return { label: "공개중", tone: "solid" };
+  if (team.currentCount >= team.count)
+    return { label: "준비완료", tone: "success" };
+  return { label: "모집중", tone: "neutral" };
+}
 
 export default function MyTeamTab() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
-  // ✅ [Zustand Hook 사용]
-  // useState로 관리하던 myTeams, sentRequests를 여기서 바로 꺼내 씁니다.
-  // 액션 함수들도 여기서 바로 가져옵니다.
   const {
     myTeams,
-    sentRequests,
     deleteTeam,
     joinTeamByCode,
     toggleTeamStatus,
@@ -32,421 +50,453 @@ export default function MyTeamTab() {
   } = useStore();
 
   const [expandedId, setExpandedId] = useState<number | null>(null);
-  const [historyVisible, setHistoryVisible] = useState(false);
-
-  // 초대 코드 입력 모달 상태
   const [joinModalVisible, setJoinModalVisible] = useState(false);
   const [inputCode, setInputCode] = useState("");
 
-  // 🚨 [삭제됨] useFocusEffect 더 이상 필요 없음! (Zustand가 알아서 화면 갱신해줌)
-
-  // 팀 삭제 핸들러
   const handleDelete = (id: number) => {
-    Alert.alert(
-      "팀 삭제 🗑️",
-      "정말 이 팀을 삭제하시겠습니까?\n(되돌릴 수 없습니다)",
-      [
-        { text: "취소", style: "cancel" },
-        {
-          text: "삭제",
-          style: "destructive",
-          onPress: () => {
-            deleteTeam(id); // ✅ 스토어 함수 호출
-          },
-        },
-      ],
-    );
+    Alert.alert("팀을 삭제할까요?", "삭제하면 되돌릴 수 없어요.", [
+      { text: "취소", style: "cancel" },
+      { text: "삭제", style: "destructive", onPress: () => deleteTeam(id) },
+    ]);
   };
 
-  // 초대 코드로 팀 참가 핸들러
   const handleJoinTeam = () => {
-    if (inputCode.length < 1) {
-      Alert.alert("잠깐!", "초대 코드를 입력해주세요.");
+    if (!inputCode.trim()) {
+      Alert.alert("초대 코드를 입력해주세요");
       return;
     }
-
-    const success = joinTeamByCode(inputCode); // ✅ 스토어 함수 호출
-    if (success) {
+    if (joinTeamByCode(inputCode)) {
       setJoinModalVisible(false);
       setInputCode("");
-      Alert.alert("참가 완료! 🤝", `친구 팀(${inputCode})에 합류했습니다.`);
+      Alert.alert("참가 완료", `친구 팀(${inputCode})에 합류했어요.`);
     } else {
-      Alert.alert("오류", "코드가 올바르지 않거나 이미 가입된 팀입니다.");
+      Alert.alert("참가할 수 없어요", "코드가 올바르지 않거나 이미 가입된 팀이에요.");
     }
   };
 
-  // 팀 카드 렌더링
   const renderTeamCard = ({ item }: { item: Team }) => {
     const isFull = item.currentCount >= item.count;
     const isPublic = item.status === "ACTIVE";
     const isExpanded = expandedId === item.id;
+    const status = teamStatus(item);
+    const progress = Math.min(item.currentCount / item.count, 1);
 
     return (
-      <TouchableOpacity
+      <PressScale
+        scaleTo={0.985}
         style={styles.card}
-        activeOpacity={0.9}
         onPress={() => setExpandedId(isExpanded ? null : item.id)}
       >
-        {/* 헤더 부분 */}
-        <View style={styles.cardHeader}>
-          <View style={styles.headerTop}>
-            <Text style={styles.deptText}>{item.dept}</Text>
-            <View
-              style={[
-                styles.badge,
-                isPublic
-                  ? styles.bgBlue
-                  : isFull
-                    ? styles.bgGreen
-                    : styles.bgGray,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.badgeText,
-                  isPublic
-                    ? styles.textWhite
-                    : isFull
-                      ? styles.textWhite
-                      : styles.textGray,
-                ]}
-              >
-                {isPublic ? "🔥 공개중" : isFull ? "✅ 준비완료" : "⏳ 모집중"}
-              </Text>
-            </View>
-          </View>
-          <Text style={styles.title}>{item.title}</Text>
-          <Text style={styles.info}>
-            {item.currentCount}/{item.count}명 · {item.age}세
-          </Text>
+        <View style={styles.cardTop}>
+          <Badge label={status.label} tone={status.tone} />
+          <Ionicons
+            name={isExpanded ? "chevron-up" : "chevron-down"}
+            size={18}
+            color={Palette.gray400}
+          />
         </View>
 
-        {/* 펼쳐진 디테일 */}
+        <Text style={styles.cardTitle} numberOfLines={1}>
+          {item.title}
+        </Text>
+        <Text style={styles.cardMeta}>
+          {item.campus} · {item.dept} · 평균 {item.age}세
+        </Text>
+
+        {/* 인원 현황을 막대로 보여주면 "몇 명 더 모아야 하는지"가 즉시 읽힌다 */}
+        <View style={styles.progressBlock}>
+          <View style={styles.progressLabelRow}>
+            <Text style={styles.progressLabel}>
+              {isFull
+                ? "인원이 다 모였어요"
+                : `${item.count - item.currentCount}명만 더 모으면 돼요`}
+            </Text>
+            <Text style={styles.progressCount}>
+              {item.currentCount}
+              <Text style={styles.progressTotal}>/{item.count}</Text>
+            </Text>
+          </View>
+          <View style={styles.progressTrack}>
+            <View
+              style={[
+                styles.progressFill,
+                {
+                  width: `${progress * 100}%`,
+                  backgroundColor: isFull ? Palette.green : Palette.brand,
+                },
+              ]}
+            />
+          </View>
+        </View>
+
         {isExpanded && (
-          <View style={styles.detailSection}>
-            <View style={styles.divider} />
-
-            {/* 관리 버튼 */}
-            <View style={styles.manageRow}>
-              <TouchableOpacity
-                style={styles.manageBtn}
-                onPress={() => router.push(`/edit/${item.id}` as any)}
-              >
-                <Ionicons name="pencil" size={16} color="#666" />
-                <Text style={styles.manageText}>정보 수정</Text>
-              </TouchableOpacity>
-
-              <View style={styles.verticalLine} />
-
-              <TouchableOpacity
-                style={styles.manageBtn}
-                onPress={() => handleDelete(item.id)}
-              >
-                <Ionicons name="trash" size={16} color="#FF5252" />
-                <Text style={[styles.manageText, { color: "#FF5252" }]}>
-                  팀 삭제
+          <View style={styles.detail}>
+            <View style={styles.codeBox}>
+              <View>
+                <Text style={styles.codeLabel}>초대 코드</Text>
+                <Text style={styles.codeValue}>
+                  {item.inviteCode || "없음"}
                 </Text>
-              </TouchableOpacity>
+              </View>
+              <Ionicons
+                name="ticket-outline"
+                size={22}
+                color={Palette.gray400}
+              />
             </View>
 
-            <View style={styles.divider} />
-
-            <Text style={styles.sectionTitle}>
-              초대 코드: {item.inviteCode || "없음"}
-            </Text>
-
             {isFull ? (
-              <TouchableOpacity
-                style={[
-                  styles.actionButton,
-                  isPublic ? styles.bgGray : styles.bgBlue,
+              <Pressable
+                onPress={() => toggleTeamStatus(item.id, !isPublic)}
+                style={({ pressed }) => [
+                  styles.primaryAction,
+                  isPublic && styles.secondaryAction,
+                  pressed && { opacity: 0.85 },
                 ]}
-                onPress={() => {
-                  toggleTeamStatus(item.id, !isPublic); // ✅ 스토어 함수 호출
-                }}
               >
                 <Text
                   style={[
-                    styles.actionText,
-                    isPublic ? styles.textBlack : styles.textWhite,
+                    styles.primaryActionText,
+                    isPublic && styles.secondaryActionText,
                   ]}
                 >
-                  {isPublic ? "🔒 비공개로 돌리기" : "📢 게시판에 등록하기"}
+                  {isPublic ? "비공개로 돌리기" : "게시판에 등록하기"}
                 </Text>
-              </TouchableOpacity>
+              </Pressable>
             ) : (
-              <Text style={styles.lockedText}>
-                🔒 친구가 다 모여야 공개할 수 있어요
-              </Text>
+              <View style={styles.lockedBox}>
+                <Ionicons
+                  name="lock-closed"
+                  size={15}
+                  color={Palette.gray500}
+                />
+                <Text style={styles.lockedText}>
+                  팀원이 다 모여야 공개할 수 있어요
+                </Text>
+              </View>
             )}
 
-            {/* 테스트용 버튼 */}
-            {!isFull && (
-              <TouchableOpacity
-                onPress={() => {
-                  simulateJoinMember(item.id); // ✅ 스토어 함수 호출
-                }}
-                style={{ marginTop: 10 }}
+            <View style={styles.manageRow}>
+              <Pressable
+                style={styles.manageBtn}
+                onPress={() => router.push(`/edit/${item.id}` as any)}
               >
-                <Text style={{ color: "blue", textAlign: "center" }}>
-                  🧪 (테스트) 친구 입장시키기
+                <Ionicons name="create-outline" size={17} color={Palette.gray600} />
+                <Text style={styles.manageText}>정보 수정</Text>
+              </Pressable>
+
+              <View style={styles.manageDivider} />
+
+              <Pressable
+                style={styles.manageBtn}
+                onPress={() => handleDelete(item.id)}
+              >
+                <Ionicons name="trash-outline" size={17} color={Palette.red} />
+                <Text style={[styles.manageText, { color: Palette.red }]}>
+                  팀 삭제
                 </Text>
-              </TouchableOpacity>
+              </Pressable>
+            </View>
+
+            {!isFull && (
+              <Pressable
+                onPress={() => simulateJoinMember(item.id)}
+                style={styles.devBtn}
+              >
+                <Text style={styles.devText}>🧪 (테스트) 친구 입장시키기</Text>
+              </Pressable>
             )}
           </View>
         )}
-      </TouchableOpacity>
+      </PressScale>
     );
   };
 
   return (
-    <View style={styles.container}>
-      {/* 헤더 */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>내 팀 관리 👑</Text>
-      </View>
+    <Screen>
+      <ScreenHeader title="내 팀" subtitle="만든 팀과 참여한 팀을 관리해요" />
 
-      {/* 상단 배너 */}
-      <View style={styles.bannerContainer}>
-        <TouchableOpacity
-          style={[styles.bannerBtn, styles.bannerBtnGray]}
-          onPress={() => setJoinModalVisible(true)}
-        >
-          <Ionicons name="ticket-outline" size={20} color="#666" />
-          <Text style={styles.bannerTextGray}>코드 입력</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.bannerBtn, styles.bannerBtnBlue]}
+      <View style={styles.actionRow}>
+        <PressScale
+          scaleTo={0.96}
+          style={[styles.actionCard, styles.actionCardBrand]}
           onPress={() => router.push("/write")}
         >
-          <Ionicons name="add" size={20} color="#3288FF" />
-          <Text style={styles.bannerTextBlue}>방 만들기</Text>
-        </TouchableOpacity>
+          <Ionicons name="add-circle" size={22} color={Palette.brand} />
+          <Text style={[styles.actionText, { color: Palette.brandText }]}>
+            팀 만들기
+          </Text>
+        </PressScale>
+
+        <PressScale
+          scaleTo={0.96}
+          style={styles.actionCard}
+          onPress={() => setJoinModalVisible(true)}
+        >
+          <Ionicons name="ticket" size={22} color={Palette.gray600} />
+          <Text style={styles.actionText}>코드로 참여</Text>
+        </PressScale>
       </View>
 
-      {/* 팀 리스트 */}
       <FlatList
         data={myTeams}
         renderItem={renderTeamCard}
         keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={{ padding: 20 }}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.listContent}
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>아직 만든 팀이 없어요!</Text>
-          </View>
+          <EmptyState
+            icon="people-outline"
+            title="아직 만든 팀이 없어요"
+            description="팀을 만들고 초대 코드로 친구를 부르면 과팅을 시작할 수 있어요."
+            actionLabel="첫 팀 만들기"
+            onAction={() => router.push("/write")}
+          />
         }
       />
 
-      {/* 모달 2: 초대코드 입력 */}
+      {/* 초대 코드 입력: 아래에서 올라오는 시트 */}
       <Modal
         visible={joinModalVisible}
-        transparent={true}
-        animationType="fade"
+        transparent
+        animationType="slide"
         onRequestClose={() => setJoinModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.joinCard}>
-            <Text style={styles.joinTitle}>🎫 초대 코드 입력</Text>
-            <Text style={styles.joinDesc}>
-              친구에게 받은 코드를 입력하세요.
+        <Pressable
+          style={styles.sheetBackdrop}
+          onPress={() => setJoinModalVisible(false)}
+        />
+        <View style={[styles.sheet, { paddingBottom: insets.bottom + 20 }]}>
+          <View style={styles.sheetHandle} />
+          <Text style={styles.sheetTitle}>초대 코드 입력</Text>
+          <Text style={styles.sheetDesc}>
+            친구에게 받은 6자리 코드를 입력해주세요.
+          </Text>
+
+          <TextInput
+            style={styles.codeInput}
+            placeholder="X7A9Z2"
+            placeholderTextColor={Palette.gray400}
+            value={inputCode}
+            onChangeText={(t) => setInputCode(t.toUpperCase())}
+            autoCapitalize="characters"
+            autoCorrect={false}
+            maxLength={6}
+          />
+
+          <Pressable
+            onPress={handleJoinTeam}
+            disabled={!inputCode.trim()}
+            style={({ pressed }) => [
+              styles.sheetSubmit,
+              !inputCode.trim() && styles.sheetSubmitDisabled,
+              pressed && { opacity: 0.85 },
+            ]}
+          >
+            <Text
+              style={[
+                styles.sheetSubmitText,
+                !inputCode.trim() && { color: Palette.gray400 },
+              ]}
+            >
+              입장하기
             </Text>
-
-            <TextInput
-              style={styles.codeInput}
-              placeholder="예: X7A9Z2"
-              value={inputCode}
-              onChangeText={setInputCode}
-              autoCapitalize="characters"
-              maxLength={6}
-            />
-
-            <View style={styles.joinBtnRow}>
-              <TouchableOpacity
-                style={styles.joinBtnCancel}
-                onPress={() => setJoinModalVisible(false)}
-              >
-                <Text style={styles.joinBtnTextGray}>취소</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.joinBtnConfirm}
-                onPress={handleJoinTeam}
-              >
-                <Text style={styles.joinBtnTextWhite}>입장하기</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+          </Pressable>
         </View>
       </Modal>
-    </View>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  // 스타일은 기존과 동일하므로 그대로 유지하면 됩니다.
-  container: { flex: 1, backgroundColor: "#F5F7FB" },
-  header: {
-    paddingTop: 60,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
-    backgroundColor: "#fff",
+  actionRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    gap: Spacing.md,
+    paddingHorizontal: Spacing.screen,
+    paddingBottom: Spacing.xl,
   },
-  headerTitle: { fontSize: 24, fontWeight: "bold" },
-  bannerContainer: {
-    flexDirection: "row",
-    paddingHorizontal: 20,
-    gap: 10,
-    marginTop: 15,
-  },
-  bannerBtn: {
+  actionCard: {
     flex: 1,
-    padding: 15,
-    borderRadius: 12,
-    alignItems: "center",
     flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: Spacing.lg,
+    borderRadius: Radius.md,
+    backgroundColor: Palette.gray100,
+  },
+  actionCardBrand: { backgroundColor: Palette.brandWeak },
+  actionText: {
+    fontSize: 15,
+    fontWeight: "700",
+    letterSpacing: -0.3,
+    color: Palette.gray700,
+  },
+
+  listContent: { paddingHorizontal: Spacing.screen, paddingBottom: Spacing.xxxl },
+
+  card: {
+    backgroundColor: Palette.white,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    padding: Spacing.xl,
+    marginBottom: Spacing.md,
+  },
+  cardTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: Spacing.md,
+  },
+  cardTitle: Typo.subtitle,
+  cardMeta: { ...Typo.caption, marginTop: 4 },
+
+  progressBlock: { marginTop: Spacing.lg },
+  progressLabelRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+    marginBottom: Spacing.sm,
+  },
+  progressLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    letterSpacing: -0.2,
+    color: Palette.gray600,
+  },
+  progressCount: {
+    fontSize: 15,
+    fontWeight: "700",
+    letterSpacing: -0.3,
+    color: Palette.gray900,
+  },
+  progressTotal: { color: Palette.gray400, fontSize: 13 },
+  progressTrack: {
+    height: 6,
+    borderRadius: Radius.full,
+    backgroundColor: Palette.gray100,
+    overflow: "hidden",
+  },
+  progressFill: { height: "100%", borderRadius: Radius.full },
+
+  detail: {
+    marginTop: Spacing.xl,
+    paddingTop: Spacing.xl,
+    borderTopWidth: Hairline.height,
+    borderTopColor: Hairline.color,
+    gap: Spacing.md,
+  },
+  codeBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: Palette.gray50,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+  },
+  codeLabel: { ...Typo.caption, fontSize: 12 },
+  codeValue: {
+    fontSize: 17,
+    fontWeight: "700",
+    letterSpacing: 2,
+    color: Palette.gray900,
+    marginTop: 2,
+  },
+
+  primaryAction: {
+    paddingVertical: Spacing.lg,
+    borderRadius: Radius.md,
+    backgroundColor: Palette.brand,
+    alignItems: "center",
+  },
+  primaryActionText: {
+    color: Palette.white,
+    fontSize: 15,
+    fontWeight: "700",
+    letterSpacing: -0.3,
+  },
+  secondaryAction: { backgroundColor: Palette.gray100 },
+  secondaryActionText: { color: Palette.gray700 },
+
+  lockedBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: Spacing.lg,
+    borderRadius: Radius.md,
+    backgroundColor: Palette.gray50,
+  },
+  lockedText: {
+    fontSize: 13,
+    fontWeight: "600",
+    letterSpacing: -0.2,
+    color: Palette.gray500,
+  },
+
+  manageRow: { flexDirection: "row", alignItems: "center" },
+  manageBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
     justifyContent: "center",
     gap: 5,
+    paddingVertical: Spacing.sm,
   },
-  bannerBtnBlue: {
-    backgroundColor: "#E8F3FF",
-    borderWidth: 1,
-    borderColor: "#3288FF",
-    borderStyle: "dashed",
-  },
-  bannerBtnGray: {
-    backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "#ddd",
-  },
-  bannerTextBlue: { color: "#3288FF", fontWeight: "bold" },
-  bannerTextGray: { color: "#666", fontWeight: "bold" },
-  card: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    marginBottom: 15,
-    padding: 20,
-    elevation: 2,
-  },
-  cardHeader: {},
-  headerTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
-  deptText: { color: "#888", fontSize: 14 },
-  badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 },
-  badgeText: { fontSize: 11, fontWeight: "bold" },
-  bgBlue: { backgroundColor: "#3288FF" },
-  bgGreen: { backgroundColor: "#4CAF50" },
-  bgGray: { backgroundColor: "#F5F5F5" },
-  textWhite: { color: "#fff" },
-  textGray: { color: "#888" },
-  textBlack: { color: "#333" },
-  title: { fontSize: 18, fontWeight: "bold", marginBottom: 5 },
-  info: { fontSize: 14, color: "#555" },
-  detailSection: { marginTop: 10 },
-  divider: { height: 1, backgroundColor: "#eee", marginVertical: 15 },
-  manageRow: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    alignItems: "center",
-  },
-  manageBtn: { flexDirection: "row", alignItems: "center", gap: 5, padding: 5 },
-  manageText: { fontSize: 14, color: "#666", fontWeight: "bold" },
-  verticalLine: { width: 1, height: 20, backgroundColor: "#eee" },
-  actionButton: {
-    marginTop: 15,
-    padding: 15,
-    borderRadius: 10,
-    alignItems: "center",
-  },
-  actionText: { fontWeight: "bold", fontSize: 16 },
-  lockedText: {
-    color: "#999",
-    fontSize: 13,
-    textAlign: "center",
-    marginTop: 10,
-  },
-  sectionTitle: { fontSize: 14, fontWeight: "bold", marginTop: 10 },
-  emptyContainer: { alignItems: "center", marginTop: 50 },
-  emptyText: { color: "#999" },
-  modalContainer: { flex: 1, backgroundColor: "#F5F7FB" },
-  modalHeader: {
-    padding: 20,
-    paddingTop: 60,
-    backgroundColor: "#fff",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  modalTitle: { fontSize: 18, fontWeight: "bold" },
-  closeText: { fontSize: 16, color: "#3288FF" },
-  emptyHistory: { flex: 1, justifyContent: "center", alignItems: "center" },
-  historyCard: {
-    backgroundColor: "#fff",
-    padding: 15,
-    borderRadius: 12,
-    marginBottom: 10,
-  },
-  historyRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 5,
-  },
-  historyTarget: { fontSize: 16, fontWeight: "bold", color: "#333" },
-  historyDate: { fontSize: 12, color: "#aaa" },
-  historyMyTeam: { fontSize: 14, color: "#666" },
-  historyStatus: {
+  manageText: {
     fontSize: 14,
-    color: "#3288FF",
-    fontWeight: "bold",
-    marginTop: 5,
+    fontWeight: "600",
+    letterSpacing: -0.2,
+    color: Palette.gray600,
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "center",
-    alignItems: "center",
+  manageDivider: { width: 1, height: 14, backgroundColor: Palette.gray200 },
+
+  devBtn: { alignItems: "center", paddingVertical: Spacing.xs },
+  devText: { fontSize: 12, color: Palette.gray400 },
+
+  sheetBackdrop: { flex: 1, backgroundColor: "rgba(25,31,40,0.45)" },
+  sheet: {
+    backgroundColor: Palette.white,
+    borderTopLeftRadius: Radius.xxl,
+    borderTopRightRadius: Radius.xxl,
+    paddingHorizontal: Spacing.screen,
+    paddingTop: Spacing.md,
+    ...Shadow.modal,
   },
-  joinCard: {
-    width: "80%",
-    backgroundColor: "#fff",
-    padding: 25,
-    borderRadius: 20,
-    alignItems: "center",
-    elevation: 5,
+  sheetHandle: {
+    alignSelf: "center",
+    width: 40,
+    height: 4,
+    borderRadius: Radius.full,
+    backgroundColor: Palette.gray200,
+    marginBottom: Spacing.xl,
   },
-  joinTitle: { fontSize: 20, fontWeight: "bold", marginBottom: 5 },
-  joinDesc: { fontSize: 14, color: "#888", marginBottom: 20 },
+  sheetTitle: Typo.title,
+  sheetDesc: { ...Typo.caption, marginTop: 6, marginBottom: Spacing.xl },
   codeInput: {
-    width: "100%",
-    backgroundColor: "#F5F7FB",
-    padding: 15,
-    borderRadius: 10,
+    backgroundColor: Palette.gray100,
+    borderRadius: Radius.md,
+    paddingVertical: Spacing.lg,
     textAlign: "center",
-    fontSize: 18,
-    fontWeight: "bold",
-    letterSpacing: 2,
-    marginBottom: 20,
+    fontSize: 22,
+    fontWeight: "700",
+    letterSpacing: 6,
+    color: Palette.gray900,
+    marginBottom: Spacing.md,
   },
-  joinBtnRow: { flexDirection: "row", gap: 10, width: "100%" },
-  joinBtnCancel: {
-    flex: 1,
-    padding: 15,
-    backgroundColor: "#f0f0f0",
-    borderRadius: 10,
+  sheetSubmit: {
+    paddingVertical: 17,
+    borderRadius: Radius.md,
+    backgroundColor: Palette.brand,
     alignItems: "center",
   },
-  joinBtnConfirm: {
-    flex: 1,
-    padding: 15,
-    backgroundColor: "#3288FF",
-    borderRadius: 10,
-    alignItems: "center",
+  sheetSubmitDisabled: { backgroundColor: Palette.gray100 },
+  sheetSubmitText: {
+    color: Palette.white,
+    fontSize: 16,
+    fontWeight: "700",
+    letterSpacing: -0.3,
   },
-  joinBtnTextGray: { color: "#666", fontWeight: "bold" },
-  joinBtnTextWhite: { color: "#fff", fontWeight: "bold" },
 });

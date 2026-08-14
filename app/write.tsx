@@ -3,16 +3,15 @@ import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
   Alert,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
   ActivityIndicator,
-  KeyboardAvoidingView,
   Platform,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 
 import { useStore, Team } from "../store/useStore";
 
@@ -76,10 +75,7 @@ export default function Write() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-    >
+    <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()}>
           <Text style={styles.cancelText}>취소</Text>
@@ -94,9 +90,14 @@ export default function Write() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView
-        style={styles.formContainer}
-        contentContainerStyle={{ paddingBottom: 100 }}
+      <KeyboardAwareScrollView
+        style={styles.flex}
+        contentContainerStyle={[styles.formContainer, { paddingBottom: 100 }]}
+        enableOnAndroid
+        extraScrollHeight={Platform.OS === "ios" ? 20 : 40}
+        enableAutomaticScroll
+        keyboardOpeningTime={0}
+        keyboardShouldPersistTaps="handled"
       >
         {/* ✅ [추가] 캠퍼스 선택 UI */}
         <Text style={styles.label}>캠퍼스는 어디인가요?</Text>
@@ -175,13 +176,14 @@ export default function Write() {
           onChangeText={setContent}
           textAlignVertical="top"
         />
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#fff" },
+  flex: { flex: 1 },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",

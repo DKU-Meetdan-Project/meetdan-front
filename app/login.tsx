@@ -4,17 +4,20 @@ import { useState } from "react";
 import MeetDanLogo from "../components/Logo";
 import {
   Alert,
+  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
   ActivityIndicator,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import AsyncStorage from "@react-native-async-storage/async-storage"; // ✅ 직접 import
 
 import { InputBox } from "../components/InputBox";
 import { MainButton } from "@/components/MainButton";
 import { API } from "@/api/client";
+import * as AuthService from "@/utils/auth";
 
 export default function Login() {
   const router = useRouter();
@@ -26,20 +29,39 @@ export default function Login() {
   const handleLogin = async () => {
     // 1. 유효성 검사
     if (!id) {
-      Alert.alert("알림", "아이디(학번)를 입력해주세요.");
+      Alert.alert("알림", "아이디를 입력해주세요.");
+      return;
+    }
+    if (!password) {
+      Alert.alert("알림", "비밀번호를 입력해주세요.");
       return;
     }
 
     try {
       setIsLoading(true);
+
+      // 2. 회원가입 시 저장해둔 아이디/비밀번호와 대조
+      const credentials = await AuthService.getAccount();
+      if (!credentials) {
+        Alert.alert(
+          "알림",
+          "가입된 계정이 없습니다. 먼저 회원가입을 진행해주세요.",
+        );
+        return;
+      }
+      if (credentials.id !== id || credentials.password !== password) {
+        Alert.alert("로그인 실패", "아이디 또는 비밀번호가 일치하지 않습니다.");
+        return;
+      }
+
       console.log(`🚀 [로그인 시도] ID: ${id}`);
 
-      // 2. API 호출
+      // 3. API 호출
       const result = await API.login("test@dankook.ac.kr"); // 테스트용 하드코딩
       console.log("📥 [API 응답]", JSON.stringify(result, null, 2));
 
       if (result.code === 200) {
-        // 3. 토큰 추출 (구조 안전하게 확인)
+        // 4. 토큰 추출 (구조 안전하게 확인)
         const token = result.data?.accessToken;
 
         if (!token) {
@@ -50,11 +72,11 @@ export default function Login() {
 
         console.log("✅ 토큰 발견:", token);
 
-        // 4. [핵심] 여기서 직접 저장 (AuthService 제거)
+        // 5. [핵심] 여기서 직접 저장 (AuthService 제거)
         await AsyncStorage.setItem("user_auth_token", token);
         console.log("💾 토큰 저장 완료! 메인으로 이동합니다.");
 
-        // 5. 강제 이동
+        // 6. 강제 이동
         router.replace("/(tabs)");
       } else {
         Alert.alert("로그인 실패", result.message || "다시 시도해주세요.");
@@ -68,17 +90,25 @@ export default function Login() {
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardAwareScrollView
+      style={styles.flex}
+      contentContainerStyle={styles.container}
+      enableOnAndroid
+      extraScrollHeight={Platform.OS === "ios" ? 20 : 40}
+      enableAutomaticScroll
+      keyboardOpeningTime={0}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+    >
       <View style={styles.formArea}>
         <View style={{ alignItems: "center", marginBottom: 30 }}>
           <MeetDanLogo size={150} showText={true} />
         </View>
         <Text style={styles.title}>로그인</Text>
-        <Text style={styles.subtitle}>단국대 포털 계정으로 로그인하세요</Text>
 
         <InputBox
-          label="아이디 (학번)"
-          placeholder="32XXXXXX"
+          label="아이디"
+          placeholder=""
           value={id}
           onChangeText={setId}
         />
@@ -98,20 +128,23 @@ export default function Login() {
         />
 
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => router.push("/signupScreen")}
           style={{ marginTop: 20, alignSelf: "center" }}
         >
           <Text style={{ color: "#999" }}>회원가입</Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </KeyboardAwareScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  flex: {
     flex: 1,
     backgroundColor: "#fff",
+  },
+  container: {
+    flexGrow: 1,
     justifyContent: "center",
     paddingHorizontal: 30,
   },

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   StyleSheet,
   Text,
@@ -6,21 +6,46 @@ import {
   View,
   TextInputProps,
 } from "react-native";
+import { Colors } from "@/constants/theme";
 
 interface InputBoxProps extends TextInputProps {
   label: string;
+  error?: string;
 }
 
-export const InputBox = ({ label, style, ...props }: InputBoxProps) => {
+export const InputBox = ({
+  label,
+  style,
+  error,
+  onFocus,
+  onBlur,
+  ...props
+}: InputBoxProps) => {
+  const [isFocused, setIsFocused] = useState(false);
+
   return (
     <View style={styles.inputContainer}>
       <Text style={styles.label}>{label}</Text>
       <TextInput
-        style={[styles.input, style]}
+        style={[
+          styles.input,
+          isFocused && styles.inputFocused,
+          !!error && styles.inputError,
+          style,
+        ]}
         autoCapitalize="none"
-        placeholderTextColor="#999"
+        placeholderTextColor={Colors.light.disabled}
+        onFocus={(e) => {
+          setIsFocused(true);
+          onFocus?.(e);
+        }}
+        onBlur={(e) => {
+          setIsFocused(false);
+          onBlur?.(e);
+        }}
         {...props}
       />
+      {!!error && <Text style={styles.errorText}>{error}</Text>}
     </View>
   );
 };
@@ -30,17 +55,32 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   label: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#333",
+    fontSize: 13,
+    fontWeight: "600",
+    color: Colors.light.textSecondary,
     marginBottom: 8,
   },
   input: {
-    borderWidth: 1,
-    borderColor: "#ddd",
-    padding: 15,
-    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "transparent",
+    paddingVertical: 15,
+    paddingHorizontal: 16,
+    borderRadius: 14,
     fontSize: 16,
-    backgroundColor: "#f9f9f9",
+    color: Colors.light.text,
+    backgroundColor: Colors.light.backgroundMuted,
+  },
+  inputFocused: {
+    borderColor: Colors.light.primary,
+    backgroundColor: "#fff",
+  },
+  inputError: {
+    borderColor: "#FF4D4F",
+  },
+  errorText: {
+    marginTop: 6,
+    fontSize: 13,
+    color: "#FF4D4F",
+    fontWeight: "500",
   },
 });

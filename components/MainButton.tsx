@@ -16,20 +16,27 @@ interface MainButtonProps extends TouchableOpacityProps {
 export const MainButton = ({
   title,
   isLoading = false,
+  disabled = false,
   style,
   ...props
 }: MainButtonProps) => {
+  const isDisabled = disabled || isLoading;
+
   return (
     <TouchableOpacity
-      style={[styles.button, style]}
-      disabled={isLoading}
-      activeOpacity={0.8}
+      style={[styles.button, disabled && styles.buttonDisabled, style]}
+      disabled={isDisabled}
+      activeOpacity={0.85}
       {...props}
     >
       {isLoading ? (
         <ActivityIndicator color="#fff" />
       ) : (
-        <Text style={styles.buttonText}>{title}</Text>
+        <Text
+          style={[styles.buttonText, disabled && styles.buttonTextDisabled]}
+        >
+          {title}
+        </Text>
       )}
     </TouchableOpacity>
   );
@@ -38,15 +45,20 @@ export const MainButton = ({
 const styles = StyleSheet.create({
   button: {
     backgroundColor: Colors.light.primary, // 테마에서 색상 가져옴
-    padding: 16,
-    borderRadius: 12,
+    paddingVertical: 17,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 10,
+  },
+  buttonDisabled: {
+    backgroundColor: Colors.light.backgroundMuted,
   },
   buttonText: {
     color: "#fff",
-    fontSize: 18,
-    fontWeight: "bold",
+    fontSize: 17,
+    fontWeight: "700",
+  },
+  buttonTextDisabled: {
+    color: Colors.light.disabled,
   },
 });

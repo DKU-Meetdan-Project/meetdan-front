@@ -245,23 +245,6 @@ export default function ChatRoom() {
               </TouchableOpacity>
             </View>
 
-            {/* 기능 버튼들 */}
-            <View style={styles.drawerSection}>
-              <Text style={styles.sectionTitle}>기능</Text>
-              <TouchableOpacity
-                style={styles.menuButton}
-                onPress={() => {
-                  setIsMenuOpen(false);
-                  router.push("/(tabs)/places");
-                }}
-              >
-                <Ionicons name="wine-outline" size={20} color="#333" />
-                <Text style={styles.menuButtonText}>
-                  🥂 제휴 술집 추천 보기
-                </Text>
-              </TouchableOpacity>
-            </View>
-
             {/* ✅ [나가기] 버튼 수정: 누르면 '제안' 함수 실행 */}
             <View style={styles.drawerFooter}>
               <TouchableOpacity
@@ -390,19 +373,6 @@ const styles = StyleSheet.create({
     borderBottomColor: "#eee",
   },
   drawerTitle: { fontSize: 18, fontWeight: "bold" },
-  drawerSection: { marginBottom: 30 },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#888",
-    marginBottom: 15,
-  },
-  menuButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 12,
-  },
-  menuButtonText: { fontSize: 16, color: "#333", marginLeft: 10 },
   drawerFooter: { position: "absolute", bottom: 40, left: 20, right: 20 },
   exitButton: {
     flexDirection: "row",
