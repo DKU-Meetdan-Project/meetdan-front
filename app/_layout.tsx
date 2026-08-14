@@ -9,6 +9,7 @@ import {
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { View, StyleSheet } from "react-native";
 // ❌ Animated는 삭제했습니다!
 
@@ -70,20 +71,23 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      {/* 1. 메인 앱 화면 (평소엔 여기 보임) */}
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="index" />
-        <Stack.Screen name="login" />
-        <Stack.Screen name="+not-found" />
-      </Stack>
+      {/* 화면들이 노치/홈바 여백을 직접 계산할 수 있게 인셋 제공 */}
+      <SafeAreaProvider>
+        {/* 1. 메인 앱 화면 (평소엔 여기 보임) */}
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="index" />
+          <Stack.Screen name="login" />
+          <Stack.Screen name="+not-found" />
+        </Stack>
 
-      {/* 2. 커스텀 스플래쉬 화면 (isReady가 false일 때만 덮어씌움) */}
-      {!isReady && (
-        <View style={styles.splashContainer}>
-          <MeetDanLogo size={150} showText={true} />
-        </View>
-      )}
+        {/* 2. 커스텀 스플래쉬 화면 (isReady가 false일 때만 덮어씌움) */}
+        {!isReady && (
+          <View style={styles.splashContainer}>
+            <MeetDanLogo size={150} showText={true} />
+          </View>
+        )}
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }

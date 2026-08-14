@@ -1,268 +1,265 @@
 // 파일: app/(tabs)/history.tsx
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useState } from "react";
-import {
-  FlatList,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-  SafeAreaView,
-} from "react-native";
-import { useStore, Team, Match } from "../../store/useStore";
+import { useMemo, useState } from "react";
+import { FlatList, StyleSheet, Text, View } from "react-native";
 
-// 탭 타입 정의
+import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PressScale } from "@/components/ui/press-scale";
+import { Divider, Screen, ScreenHeader } from "@/components/ui/screen";
+import { Segmented } from "@/components/ui/segmented";
+import { Palette, Radius, Spacing, Typo } from "@/constants/theme";
+import { Match, Team, useStore } from "../../store/useStore";
+
 type TabType = "RECEIVED" | "SENT" | "MATCHES";
+
+interface RequestRow {
+  id: number;
+  timestamp: string;
+  team: Team;
+  received: boolean;
+}
 
 export default function HistoryTab() {
   const router = useRouter();
   const { receivedRequests, sentRequests, posts, matches } = useStore();
-
   const [activeTab, setActiveTab] = useState<TabType>("RECEIVED");
 
-  // 1. [받은 신청] 데이터 가공
-  const receivedList = receivedRequests.map((req) => {
-    const senderTeam = posts.find((p) => p.id === req.senderTeamId);
-    return { ...req, teamInfo: senderTeam, type: "RECEIVED" };
-  });
+  // 신청 데이터에 상대 팀 정보를 붙이고, 찾지 못한 건 걸러낸다
+  const receivedList = useMemo<RequestRow[]>(
+    () =>
+      receivedRequests
+        .map((req) => ({
+          id: req.id,
+          timestamp: req.timestamp,
+          team: posts.find((p) => p.id === req.senderTeamId)!,
+          received: true,
+        }))
+        .filter((r) => !!r.team),
+    [receivedRequests, posts],
+  );
 
-  // 2. [보낸 신청] 데이터 가공
-  const sentList = sentRequests.map((req) => {
-    const receiverTeam = posts.find((p) => p.id === req.receiverTeamId);
-    return { ...req, teamInfo: receiverTeam, type: "SENT" };
-  });
+  const sentList = useMemo<RequestRow[]>(
+    () =>
+      sentRequests
+        .map((req) => ({
+          id: req.id,
+          timestamp: req.timestamp,
+          team: posts.find((p) => p.id === req.receiverTeamId)!,
+          received: false,
+        }))
+        .filter((r) => !!r.team),
+    [sentRequests, posts],
+  );
 
-  // 공통 렌더링 (신청서용)
-  const renderRequestItem = ({ item }: { item: any }) => {
-    const team: Team = item.teamInfo;
-    if (!team) return null;
-
-    const isReceived = item.type === "RECEIVED";
-    const statusText = isReceived
-      ? "💌 과팅 신청이 도착했습니다!"
-      : "⏳ 상대방의 수락을 기다리고 있어요.";
-    const statusColor = isReceived ? "#3288FF" : "#888";
+  const renderRequestItem = ({ item }: { item: RequestRow }) => {
+    const { team, received } = item;
 
     return (
-      <TouchableOpacity
-        style={styles.card}
+      <PressScale
+        scaleTo={0.98}
+        style={styles.row}
+        disabled={!received}
         onPress={() =>
-          isReceived && router.push(`/match/party/${team.id}` as any)
+          received && router.push(`/match/party/${team.id}` as any)
         }
-        activeOpacity={isReceived ? 0.7 : 1}
       >
-        <View style={styles.cardRow}>
-          <View style={styles.avatarContainer}>
-            <View
-              style={[
-                styles.avatarPlaceholder,
-                !isReceived && { backgroundColor: "#f5f5f5" },
-              ]}
+        <View style={styles.avatarWrap}>
+          <View
+            style={[styles.avatar, !received && styles.avatarMuted]}
             >
-              <Text style={styles.avatarText}>{team.title[0]}</Text>
-            </View>
-            {isReceived && <View style={styles.newBadge} />}
-          </View>
-
-          <View style={styles.cardContent}>
-            <View style={styles.headerRow}>
-              <Text style={styles.teamName}>{team.title}</Text>
-              <Text style={styles.timestamp}>{item.timestamp}</Text>
-            </View>
-            <Text style={styles.subInfo}>
-              {team.dept} · {team.count}명
-            </Text>
-            <Text style={styles.message} numberOfLines={1}>
-              {isReceived
-                ? "얼른 확인하고 수락해보세요!"
-                : "매칭이 성사되면 알림을 드릴게요."}
+            <Text style={[styles.avatarText, !received && styles.avatarTextMuted]}>
+              {team.title.charAt(0)}
             </Text>
           </View>
-          {isReceived && (
-            <Ionicons name="chevron-forward" size={20} color="#ccc" />
-          )}
+          {received && <View style={styles.newDot} />}
         </View>
 
-        <View style={styles.statusRow}>
-          <Text style={[styles.statusText, { color: statusColor }]}>
-            {statusText}
+        <View style={styles.rowBody}>
+          <View style={styles.rowTop}>
+            <Text style={styles.title} numberOfLines={1}>
+              {team.title}
+            </Text>
+            <Text style={styles.time}>{item.timestamp}</Text>
+          </View>
+
+          <Text style={styles.meta} numberOfLines={1}>
+            {team.campus} · {team.dept} · {team.count}명
           </Text>
-          {isReceived && <Text style={styles.actionText}>확인하기</Text>}
+
+          <View style={styles.statusRow}>
+            <Badge
+              label={received ? "신청 도착" : "수락 대기중"}
+              tone={received ? "brand" : "neutral"}
+            />
+            <Text style={styles.statusHint}>
+              {received
+                ? "확인하고 수락해보세요"
+                : "성사되면 알림을 보내드릴게요"}
+            </Text>
+          </View>
         </View>
-      </TouchableOpacity>
+
+        {received && (
+          <Ionicons
+            name="chevron-forward"
+            size={18}
+            color={Palette.gray300}
+            style={styles.chevron}
+          />
+        )}
+      </PressScale>
     );
   };
 
-  // 매칭 렌더링 (매칭용)
   const renderMatchItem = ({ item }: { item: Match }) => (
-    <TouchableOpacity
-      style={styles.card}
+    <PressScale
+      scaleTo={0.98}
+      style={styles.row}
       onPress={() => router.push(`/chat/${item.id}` as any)}
     >
-      <View style={styles.cardRow}>
-        <View
-          style={[styles.avatarPlaceholder, { backgroundColor: "#E8F3FF" }]}
-        >
-          <Ionicons name="chatbubbles" size={20} color="#3288FF" />
+      <View style={[styles.avatar, styles.avatarBrand]}>
+        <Ionicons name="chatbubbles" size={20} color={Palette.brand} />
+      </View>
+
+      <View style={styles.rowBody}>
+        <View style={styles.rowTop}>
+          <Text style={styles.title} numberOfLines={1}>
+            {item.partnerTeamName}
+          </Text>
+          <Text style={styles.time}>{item.startedAt}</Text>
         </View>
-        <View style={styles.cardContent}>
-          <Text style={styles.teamName}>{item.partnerTeamName}</Text>
-          <Text style={styles.subInfo}>매칭 날짜: {item.startedAt}</Text>
-        </View>
-        <View style={styles.chatBadge}>
-          <Text style={styles.chatBadgeText}>채팅중</Text>
+        <Text style={styles.meta}>매칭 성사 · 대화를 시작해보세요</Text>
+        <View style={styles.statusRow}>
+          <Badge label="채팅중" tone="success" />
         </View>
       </View>
-    </TouchableOpacity>
+
+      <Ionicons
+        name="chevron-forward"
+        size={18}
+        color={Palette.gray300}
+        style={styles.chevron}
+      />
+    </PressScale>
   );
 
+  const emptyByTab = {
+    RECEIVED: {
+      icon: "mail-outline" as const,
+      title: "받은 신청이 없어요",
+      description: "팀을 게시판에 공개하면 신청을 받을 수 있어요.",
+    },
+    SENT: {
+      icon: "paper-plane-outline" as const,
+      title: "보낸 신청이 없어요",
+      description: "마음에 드는 팀에 먼저 신청해보세요.",
+    },
+    MATCHES: {
+      icon: "chatbubbles-outline" as const,
+      title: "성사된 매칭이 없어요",
+      description: "신청을 수락하면 여기에서 바로 대화할 수 있어요.",
+    },
+  }[activeTab];
+
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>활동 내역</Text>
-      </View>
+    <Screen>
+      <ScreenHeader title="활동" />
 
-      <View style={styles.tabContainer}>
-        {(["RECEIVED", "SENT", "MATCHES"] as TabType[]).map((tab) => (
-          <TouchableOpacity
-            key={tab}
-            style={[styles.tabButton, activeTab === tab && styles.activeTab]}
-            onPress={() => setActiveTab(tab)}
-          >
-            <Text
-              style={[
-                styles.tabText,
-                activeTab === tab && styles.activeTabText,
-              ]}
-            >
-              {tab === "RECEIVED" && `받은 신청 ${receivedList.length}`}
-              {tab === "SENT" && `보낸 신청 ${sentList.length}`}
-              {tab === "MATCHES" && `매칭 ${matches.length}`}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+      <Segmented<TabType>
+        value={activeTab}
+        onChange={setActiveTab}
+        items={[
+          { value: "RECEIVED", label: "받은 신청", count: receivedList.length },
+          { value: "SENT", label: "보낸 신청", count: sentList.length },
+          { value: "MATCHES", label: "매칭", count: matches.length },
+        ]}
+      />
 
-      {/* ✅ [핵심 수정] 탭에 따라 아예 다른 FlatList를 렌더링해서 타입 충돌 방지 */}
-      <View style={styles.listContainer}>
-        {activeTab === "MATCHES" ? (
-          // 매칭 목록일 때
-          <FlatList
-            data={matches}
-            renderItem={renderMatchItem}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={{ padding: 20 }}
-            ListEmptyComponent={
-              <View style={styles.emptyBox}>
-                <Text style={styles.emptyText}>성사된 매칭이 없습니다.</Text>
-              </View>
-            }
-          />
-        ) : (
-          // 받은/보낸 신청 목록일 때
-          <FlatList
-            data={activeTab === "RECEIVED" ? receivedList : sentList}
-            renderItem={renderRequestItem}
-            keyExtractor={(item) => item.id.toString()}
-            contentContainerStyle={{ padding: 20 }}
-            ListEmptyComponent={
-              <View style={styles.emptyBox}>
-                <Text style={styles.emptyText}>내역이 없습니다.</Text>
-              </View>
-            }
-          />
-        )}
-      </View>
-    </SafeAreaView>
+      {activeTab === "MATCHES" ? (
+        <FlatList
+          data={matches}
+          renderItem={renderMatchItem}
+          keyExtractor={(item) => item.id}
+          showsVerticalScrollIndicator={false}
+          ItemSeparatorComponent={() => <Divider inset={76} />}
+          contentContainerStyle={styles.listContent}
+          ListEmptyComponent={<EmptyState {...emptyByTab} />}
+        />
+      ) : (
+        <FlatList
+          data={activeTab === "RECEIVED" ? receivedList : sentList}
+          renderItem={renderRequestItem}
+          keyExtractor={(item) => item.id.toString()}
+          showsVerticalScrollIndicator={false}
+          ItemSeparatorComponent={() => <Divider inset={76} />}
+          contentContainerStyle={styles.listContent}
+          ListEmptyComponent={<EmptyState {...emptyByTab} />}
+        />
+      )}
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F5F7FB" },
-  header: {
-    padding: 20,
-    backgroundColor: "#fff",
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
-  },
-  headerTitle: { fontSize: 24, fontWeight: "bold", color: "#333" },
-  tabContainer: {
+  listContent: { paddingTop: Spacing.sm, paddingBottom: Spacing.xxxl },
+
+  row: {
     flexDirection: "row",
-    backgroundColor: "#fff",
-    paddingHorizontal: 20,
-  },
-  tabButton: {
-    paddingVertical: 15,
-    marginRight: 20,
-    borderBottomWidth: 2,
-    borderBottomColor: "transparent",
-  },
-  activeTab: { borderBottomColor: "#333" },
-  tabText: { fontSize: 15, color: "#999", fontWeight: "bold" },
-  activeTabText: { color: "#333" },
-  listContainer: { flex: 1 },
-  card: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 15,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 5,
-    elevation: 2,
-  },
-  cardRow: { flexDirection: "row", alignItems: "center" },
-  avatarContainer: { position: "relative" },
-  avatarPlaceholder: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: "#F0F0F0",
-    justifyContent: "center",
     alignItems: "center",
-    marginRight: 15,
+    gap: Spacing.md,
+    paddingHorizontal: Spacing.screen,
+    paddingVertical: Spacing.lg,
+    backgroundColor: Palette.white,
   },
-  avatarText: { fontSize: 20, fontWeight: "bold", color: "#666" },
-  newBadge: {
+
+  avatarWrap: { position: "relative" },
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.full,
+    backgroundColor: Palette.gray100,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarMuted: { backgroundColor: Palette.gray50 },
+  avatarBrand: { backgroundColor: Palette.brandWeak },
+  avatarText: {
+    fontSize: 18,
+    fontWeight: "700",
+    letterSpacing: -0.3,
+    color: Palette.gray700,
+  },
+  avatarTextMuted: { color: Palette.gray400 },
+  newDot: {
     position: "absolute",
-    top: 0,
-    right: 12,
+    top: -1,
+    right: -1,
     width: 10,
     height: 10,
-    borderRadius: 5,
-    backgroundColor: "#FF6B6B",
-    borderWidth: 1.5,
-    borderColor: "#fff",
+    borderRadius: Radius.full,
+    backgroundColor: Palette.red,
+    borderWidth: 2,
+    borderColor: Palette.white,
   },
-  cardContent: { flex: 1 },
-  headerRow: {
+
+  rowBody: { flex: 1 },
+  rowTop: {
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 4,
+    gap: Spacing.sm,
   },
-  teamName: { fontSize: 16, fontWeight: "bold", color: "#333" },
-  timestamp: { fontSize: 12, color: "#aaa" },
-  subInfo: { fontSize: 13, color: "#666", marginBottom: 4 },
-  message: { fontSize: 13, color: "#888" },
+  title: { ...Typo.subtitle, fontSize: 16, flex: 1 },
+  time: { ...Typo.caption, fontSize: 12, color: Palette.gray400 },
+  meta: { ...Typo.caption, marginTop: 3 },
   statusRow: {
-    marginTop: 15,
-    paddingTop: 15,
-    borderTopWidth: 1,
-    borderTopColor: "#f5f5f5",
     flexDirection: "row",
-    justifyContent: "space-between",
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginTop: Spacing.sm,
   },
-  statusText: { fontSize: 13, fontWeight: "bold" },
-  actionText: { fontSize: 13, color: "#999" },
-  emptyBox: { alignItems: "center", marginTop: 50 },
-  emptyText: { color: "#999", fontSize: 16 },
-  chatBadge: {
-    backgroundColor: "#E8F3FF",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  chatBadgeText: { fontSize: 11, color: "#3288FF", fontWeight: "bold" },
+  statusHint: { ...Typo.caption, fontSize: 12, flexShrink: 1 },
+  chevron: { marginLeft: -Spacing.xs },
 });

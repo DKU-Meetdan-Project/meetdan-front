@@ -1,21 +1,41 @@
 // 파일 경로: app/(tabs)/profile.tsx
-import React, { useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Image,
+  Modal,
+  Platform,
+  Pressable,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
-  ScrollView,
-  Modal, // 모달 추가
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-// ✅ 공통 컴포넌트 불러오기 (기존 유지)
-import { InputBox } from "../../components/InputBox";
-import { MainButton } from "../../components/MainButton";
+import { InputBox } from "@/components/InputBox";
+import { MainButton } from "@/components/MainButton";
+import { Badge } from "@/components/ui/badge";
+import { PressScale } from "@/components/ui/press-scale";
+import {
+  Divider,
+  Screen,
+  ScreenHeader,
+  SectionGap,
+} from "@/components/ui/screen";
+import {
+  CampusColor,
+  Palette,
+  Radius,
+  Shadow,
+  Spacing,
+  Typo,
+} from "@/constants/theme";
+import * as AuthService from "@/utils/auth";
+import type { Account, UserProfile } from "@/utils/auth";
 
 // 💡 12개 프로필 이미지 에셋 불러오기
 const profileImages = [
@@ -33,346 +53,666 @@ const profileImages = [
   require("../../assets/images/profile_avatars/12.png"),
 ];
 
+const MBTI_TYPES = [
+  "ISTJ", "ISFJ", "INFJ", "INTJ",
+  "ISTP", "ISFP", "INFP", "INTP",
+  "ESTP", "ESFP", "ENFP", "ENTP",
+  "ESTJ", "ESFJ", "ENFJ", "ENTJ",
+] as const;
+
+const NICKNAME_MAX = 12;
+const BIO_MAX = 40;
+
+const MENU_ITEMS: {
+  icon: React.ComponentProps<typeof Ionicons>["name"];
+  label: string;
+}[] = [
+  { icon: "notifications-outline", label: "알림 설정" },
+  { icon: "shield-checkmark-outline", label: "학생증 재인증" },
+  { icon: "document-text-outline", label: "이용약관" },
+];
+
 export default function ProfileTab() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
-  // 기본 정보 상태 관리
+  // 회원가입 때 확정된 정보 (읽기 전용)
+  const [account, setAccount] = useState<Account | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // 사용자가 바꿀 수 있는 정보
+  const [profile, setProfile] = useState<UserProfile>(AuthService.DEFAULT_PROFILE);
+  // 편집 중인 임시 값. 취소하면 그냥 버린다.
+  const [draft, setDraft] = useState<UserProfile>(AuthService.DEFAULT_PROFILE);
   const [isEditing, setIsEditing] = useState(false);
-  const [nickname, setNickname] = useState("코딩하는 곰 🐻");
-  const [major, setMajor] = useState("단국대학교 소프트웨어학과");
-  const [campus, setCampus] = useState("죽전"); // 캠퍼스 상태 추가
+  const [isSaving, setIsSaving] = useState(false);
 
-  // 아바타 관련 상태 관리
-  const [selectedImageIdx, setSelectedImageIdx] = useState(0); // 현재 내 프로필
-  const [isModalVisible, setModalVisible] = useState(false); // 팝업창 상태
-  const [tempSelectedIdx, setTempSelectedIdx] = useState(0); // 팝업창에서 임시로 고른 아바타
+  const [isModalVisible, setModalVisible] = useState(false);
+  const [tempSelectedIdx, setTempSelectedIdx] = useState(0);
 
-  // 수정 모드 토글
-  const handleEditToggle = () => {
-    setIsEditing(!isEditing);
+  useEffect(() => {
+    (async () => {
+      const [savedAccount, savedProfile] = await Promise.all([
+        AuthService.getAccount(),
+        AuthService.getProfile(),
+      ]);
+      setAccount(savedAccount);
+      setProfile(savedProfile);
+      setIsLoading(false);
+    })();
+  }, []);
+
+  const startEditing = () => {
+    setDraft(profile); // 현재 저장된 값에서 시작
+    setIsEditing(true);
   };
 
-  // 아바타 팝업창 열기 (기존 handleImageChange 대체)
+  const cancelEditing = () => {
+    setIsEditing(false);
+    setDraft(profile);
+  };
+
+  const handleSave = async () => {
+    const nickname = draft.nickname.trim();
+    const bio = draft.bio.trim();
+
+    if (nickname.length > NICKNAME_MAX) {
+      Alert.alert("알림", `닉네임은 ${NICKNAME_MAX}자까지 입력할 수 있어요.`);
+      return;
+    }
+
+    const next: UserProfile = { ...draft, nickname, bio };
+    try {
+      setIsSaving(true);
+      await AuthService.saveProfile(next);
+      setProfile(next);
+      setIsEditing(false);
+    } catch (e) {
+      Alert.alert("오류", "프로필 저장 중 문제가 발생했습니다.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const openAvatarModal = () => {
-    setTempSelectedIdx(selectedImageIdx); // 열 때 현재 내 프사로 세팅
+    setTempSelectedIdx(draft.avatarIdx);
     setModalVisible(true);
   };
 
-  // 팝업창에서 확인 버튼 누름
   const confirmAvatar = () => {
-    setSelectedImageIdx(tempSelectedIdx); // 프사 확정!
+    setDraft((prev) => ({ ...prev, avatarIdx: tempSelectedIdx }));
     setModalVisible(false);
   };
 
-  // 로그아웃 핸들러
   const handleLogout = () => {
-    Alert.alert("로그아웃", "정말 로그아웃 하시겠습니까?", [
+    Alert.alert("로그아웃할까요?", "다시 로그인해야 앱을 이용할 수 있어요.", [
       { text: "취소", style: "cancel" },
       {
         text: "로그아웃",
         style: "destructive",
-        onPress: () => {
-          router.replace("/login");
-        },
+        onPress: () => router.replace("/login"),
       },
     ]);
   };
 
-  return (
-    <View style={styles.container}>
-      {/* 헤더 */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>마이페이지</Text>
-      </View>
+  // 편집 중에는 미리보기가 바로 보이도록 draft 값을 쓴다
+  const shown = isEditing ? draft : profile;
+  const displayName = shown.nickname.trim() || account?.name || "밋단 회원";
+  // 저장된 인덱스가 에셋 개수를 벗어나도 화면이 깨지지 않게
+  const avatarSource =
+    profileImages[shown.avatarIdx] ?? profileImages[0];
+  const campusColor = account
+    ? CampusColor[account.campus as keyof typeof CampusColor]
+    : undefined;
 
-      <ScrollView
-        contentContainerStyle={{ paddingBottom: 30 }}
+  if (isLoading) {
+    return (
+      <Screen>
+        <ScreenHeader title="마이" />
+        <View style={styles.loading}>
+          <ActivityIndicator color={Palette.brand} />
+        </View>
+      </Screen>
+    );
+  }
+
+  return (
+    <Screen>
+      <ScreenHeader title="마이" />
+
+      <KeyboardAwareScrollView
+        contentContainerStyle={{ paddingBottom: Spacing.xxxl }}
         showsVerticalScrollIndicator={false}
+        enableOnAndroid
+        extraScrollHeight={Platform.OS === "ios" ? 20 : 40}
+        enableAutomaticScroll
+        keyboardOpeningTime={0}
+        keyboardShouldPersistTaps="handled"
       >
-        {/* 프로필 섹션 */}
+        {/* ── 프로필 요약 / 편집 ─────────────────────────── */}
         <View style={styles.profileSection}>
-          {/* 이미지 (수정 모드일 때만 클릭 가능 & 카메라 아이콘 표시) */}
-          <TouchableOpacity
-            style={styles.avatarContainer}
-            disabled={!isEditing} // 💡 수정 모드가 아닐 땐 터치 안 됨
+          <Pressable
+            style={styles.avatarWrap}
+            disabled={!isEditing}
             onPress={openAvatarModal}
           >
-            <Image
-              source={profileImages[selectedImageIdx]}
-              style={styles.avatar}
-            />
+            <Image source={avatarSource} style={styles.avatar} />
             {isEditing && (
-              <View style={styles.cameraIconBadge}>
-                <Ionicons name="camera" size={14} color="#fff" />
+              <View style={styles.cameraBadge}>
+                <Ionicons name="camera" size={13} color={Palette.white} />
               </View>
             )}
-          </TouchableOpacity>
+          </Pressable>
 
-          {/* 📝 정보 영역: 수정 모드일 땐 InputBox + 캠퍼스 버튼, 아닐 땐 Text */}
-          <View style={{ width: "100%", paddingHorizontal: 20 }}>
-            {isEditing ? (
-              <>
-                <InputBox
-                  label="닉네임"
-                  value={nickname}
-                  onChangeText={setNickname}
-                  placeholder="닉네임을 입력하세요"
-                />
-                <InputBox
-                  label="학과"
-                  value={major}
-                  onChangeText={setMajor}
-                  placeholder="학과를 입력하세요"
-                />
+          {isEditing ? (
+            <View style={styles.editForm}>
+              <InputBox
+                label="닉네임"
+                value={draft.nickname}
+                onChangeText={(text) =>
+                  setDraft((prev) => ({ ...prev, nickname: text }))
+                }
+                placeholder={account?.name ?? "닉네임을 입력하세요"}
+                maxLength={NICKNAME_MAX}
+              />
 
-                {/* 캠퍼스 선택 영역 (수정 모드에서만 보임) */}
-                <Text style={styles.campusLabel}>캠퍼스</Text>
-                <View style={styles.campusContainer}>
-                  <TouchableOpacity
-                    style={[
-                      styles.campusButton,
-                      campus === "죽전" && styles.campusActive,
-                    ]}
-                    onPress={() => setCampus("죽전")}
-                  >
-                    <Text
-                      style={[
-                        styles.campusText,
-                        campus === "죽전" && styles.campusActiveText,
-                      ]}
+              <InputBox
+                label="한 줄 소개"
+                value={draft.bio}
+                onChangeText={(text) =>
+                  setDraft((prev) => ({ ...prev, bio: text }))
+                }
+                placeholder="나를 한 줄로 소개해보세요"
+                style={styles.bioInput}
+                multiline
+                maxLength={BIO_MAX}
+              />
+              <Text style={styles.counter}>
+                {draft.bio.length}/{BIO_MAX}
+              </Text>
+
+              <Text style={styles.fieldLabel}>MBTI</Text>
+              <View style={styles.mbtiGrid}>
+                {MBTI_TYPES.map((type) => {
+                  const active = draft.mbti === type;
+                  return (
+                    <Pressable
+                      key={type}
+                      // 이미 고른 걸 다시 누르면 선택 해제
+                      onPress={() =>
+                        setDraft((prev) => ({
+                          ...prev,
+                          mbti: prev.mbti === type ? "" : type,
+                        }))
+                      }
+                      style={[styles.mbtiCell, active && styles.mbtiCellActive]}
                     >
-                      죽전
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.campusButton,
-                      campus === "천안" && styles.campusActive,
-                    ]}
-                    onPress={() => setCampus("천안")}
-                  >
-                    <Text
-                      style={[
-                        styles.campusText,
-                        campus === "천안" && styles.campusActiveText,
-                      ]}
-                    >
-                      천안
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </>
-            ) : (
-              <View style={{ alignItems: "center", marginBottom: 20 }}>
-                <Text style={styles.name}>{nickname}</Text>
-                {/* 일반 모드일 땐 캠퍼스와 학과를 묶어서 텍스트로 보여줌 */}
-                <Text style={styles.major}>
-                  {campus} 캠퍼스 | {major}
-                </Text>
+                      <Text
+                        style={[
+                          styles.mbtiText,
+                          active && styles.mbtiTextActive,
+                        ]}
+                      >
+                        {type}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
               </View>
-            )}
+              <Text style={styles.helperText}>
+                선택한 항목을 다시 누르면 해제돼요.
+              </Text>
 
-            {/* ✅ 공통 버튼 사용 */}
-            <MainButton
-              title={isEditing ? "저장 완료" : "프로필 수정"}
-              onPress={handleEditToggle}
+              <MainButton
+                title="저장하기"
+                onPress={handleSave}
+                isLoading={isSaving}
+              />
+              <Pressable
+                style={styles.cancelButton}
+                onPress={cancelEditing}
+                disabled={isSaving}
+              >
+                <Text style={styles.cancelButtonText}>취소</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <View style={styles.summary}>
+              <Text style={styles.name}>{displayName}</Text>
+
+              <Text
+                style={[styles.bio, !shown.bio && styles.bioEmpty]}
+                numberOfLines={2}
+              >
+                {shown.bio || "한 줄 소개를 추가해보세요"}
+              </Text>
+
+              <View style={styles.summaryMetaRow}>
+                {!!account && (
+                  <Badge label={`${account.campus} 캠퍼스`} colors={campusColor} />
+                )}
+                {!!shown.mbti && <Badge label={shown.mbti} tone="brand" />}
+                {!!account && <Text style={styles.major}>{account.dept}</Text>}
+              </View>
+
+              <PressScale
+                scaleTo={0.96}
+                style={styles.editButton}
+                onPress={startEditing}
+              >
+                <Ionicons
+                  name="create-outline"
+                  size={16}
+                  color={Palette.gray700}
+                />
+                <Text style={styles.editButtonText}>프로필 수정</Text>
+              </PressScale>
+            </View>
+          )}
+        </View>
+
+        <SectionGap />
+
+        {/* ── 회원가입 때 인증한 정보 (수정 불가) ─────────── */}
+        <View style={styles.infoSection}>
+          <View style={styles.infoHeader}>
+            <Text style={styles.infoTitle}>가입 정보</Text>
+            <Ionicons
+              name="lock-closed"
+              size={13}
+              color={Palette.gray400}
             />
           </View>
-        </View>
+          <Text style={styles.infoDesc}>
+            학교 인증에 쓰인 정보라 직접 바꿀 수 없어요.{"\n"}
+            변경이 필요하면 학생증 재인증을 진행해주세요.
+          </Text>
 
-        {/* 메뉴 리스트 (기존 유지) */}
-        <View style={styles.menuContainer}>
-          <TouchableOpacity style={styles.menuItem}>
-            <Ionicons name="notifications-outline" size={24} color="#333" />
-            <Text style={styles.menuText}>알림 설정</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.menuItem}>
-            <Ionicons name="shield-checkmark-outline" size={24} color="#333" />
-            <Text style={styles.menuText}>학생증 재인증</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.menuItem}>
-            <Ionicons name="document-text-outline" size={24} color="#333" />
-            <Text style={styles.menuText}>이용약관</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* 로그아웃 버튼 */}
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Text style={styles.logoutText}>로그아웃</Text>
-        </TouchableOpacity>
-      </ScrollView>
-
-      {/* ========================================================= */}
-      {/* 팝업창 (Modal) 영역: 프사 눌렀을 때만 뿅 나타남 */}
-      {/* ========================================================= */}
-      <Modal visible={isModalVisible} transparent={true} animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>프로필 캐릭터 선택</Text>
-
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.imageScroll}
-            >
-              {profileImages.map((img, index) => (
-                <TouchableOpacity
-                  key={index}
-                  onPress={() => setTempSelectedIdx(index)} // 임시 선택
-                  style={[
-                    styles.imageWrapper,
-                    tempSelectedIdx === index && styles.selectedImageWrapper,
-                  ]}
-                >
-                  <Image source={img} style={styles.thumbnail} />
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-
-            <View style={styles.modalBtnRow}>
-              <TouchableOpacity
-                style={styles.cancelBtn}
-                onPress={() => setModalVisible(false)}
-              >
-                <Text style={styles.cancelBtnText}>취소</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.confirmBtn}
-                onPress={confirmAvatar}
-              >
-                <Text style={styles.confirmBtnText}>확인</Text>
-              </TouchableOpacity>
+          {account ? (
+            <View style={styles.infoList}>
+              <InfoRow label="이름" value={account.name} />
+              <InfoRow
+                label="성별"
+                value={account.gender === "M" ? "남성" : "여성"}
+              />
+              <InfoRow label="캠퍼스" value={`${account.campus}캠퍼스`} />
+              <InfoRow label="학과" value={account.dept} />
+              <InfoRow label="학교 이메일" value={account.email} />
+              <InfoRow label="아이디" value={account.id} />
             </View>
+          ) : (
+            <Text style={styles.infoEmpty}>
+              저장된 가입 정보가 없어요. 회원가입을 먼저 완료해주세요.
+            </Text>
+          )}
+        </View>
+
+        <SectionGap />
+
+        {/* ── 메뉴 ─────────────────────────────────────── */}
+        <View style={styles.menuSection}>
+          {MENU_ITEMS.map((item, index) => (
+            <View key={item.label}>
+              {index > 0 && <Divider inset={Spacing.screen + 34} />}
+              <Pressable
+                style={({ pressed }) => [
+                  styles.menuRow,
+                  pressed && { backgroundColor: Palette.gray50 },
+                ]}
+              >
+                <Ionicons name={item.icon} size={22} color={Palette.gray600} />
+                <Text style={styles.menuText}>{item.label}</Text>
+                <Ionicons
+                  name="chevron-forward"
+                  size={18}
+                  color={Palette.gray300}
+                />
+              </Pressable>
+            </View>
+          ))}
+        </View>
+
+        <SectionGap />
+
+        <Pressable
+          onPress={handleLogout}
+          style={({ pressed }) => [
+            styles.logoutRow,
+            pressed && { backgroundColor: Palette.gray50 },
+          ]}
+        >
+          <Text style={styles.logoutText}>로그아웃</Text>
+        </Pressable>
+      </KeyboardAwareScrollView>
+
+      {/* ── 아바타 선택 시트 ───────────────────────────── */}
+      <Modal
+        visible={isModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <Pressable
+          style={styles.sheetBackdrop}
+          onPress={() => setModalVisible(false)}
+        />
+        <View style={[styles.sheet, { paddingBottom: insets.bottom + 20 }]}>
+          <View style={styles.sheetHandle} />
+          <Text style={styles.sheetTitle}>프로필 캐릭터</Text>
+          <Text style={styles.sheetDesc}>마음에 드는 캐릭터를 골라주세요.</Text>
+
+          <View style={styles.avatarGrid}>
+            {profileImages.map((img, index) => (
+              <Pressable
+                key={index}
+                onPress={() => setTempSelectedIdx(index)}
+                style={[
+                  styles.thumbWrap,
+                  tempSelectedIdx === index && styles.thumbSelected,
+                ]}
+              >
+                <Image source={img} style={styles.thumb} />
+              </Pressable>
+            ))}
+          </View>
+
+          <View style={styles.sheetActions}>
+            <Pressable
+              style={styles.sheetCancel}
+              onPress={() => setModalVisible(false)}
+            >
+              <Text style={styles.sheetCancelText}>취소</Text>
+            </Pressable>
+            <Pressable style={styles.sheetConfirm} onPress={confirmAvatar}>
+              <Text style={styles.sheetConfirmText}>확인</Text>
+            </Pressable>
           </View>
         </View>
       </Modal>
+    </Screen>
+  );
+}
+
+/** 가입 정보 한 줄. 자물쇠로 "여긴 못 바꾼다"를 분명히 보여준다. */
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.infoRow}>
+      <Text style={styles.infoLabel}>{label}</Text>
+      <Text style={styles.infoValue} numberOfLines={1}>
+        {value}
+      </Text>
+      <Ionicons name="lock-closed" size={13} color={Palette.gray300} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
-  header: {
-    paddingTop: 60,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
-  },
-  headerTitle: { fontSize: 24, fontWeight: "bold" },
+  loading: { flex: 1, alignItems: "center", justifyContent: "center" },
 
   profileSection: {
     alignItems: "center",
-    paddingVertical: 30,
-    borderBottomWidth: 10,
-    borderBottomColor: "#F5F7FB",
+    paddingHorizontal: Spacing.screen,
+    paddingTop: Spacing.sm,
+    paddingBottom: Spacing.xxl,
   },
-  avatarContainer: { position: "relative", marginBottom: 20 },
-  avatar: { width: 80, height: 80, borderRadius: 40, backgroundColor: "#eee" },
-  cameraIconBadge: {
+  avatarWrap: { position: "relative", marginBottom: Spacing.lg },
+  avatar: {
+    width: 88,
+    height: 88,
+    borderRadius: Radius.full,
+    backgroundColor: Palette.gray100,
+  },
+  cameraBadge: {
     position: "absolute",
     bottom: 0,
     right: 0,
-    backgroundColor: "#333",
-    padding: 6,
-    borderRadius: 15,
-    borderWidth: 2,
-    borderColor: "#fff",
-  },
-
-  name: { fontSize: 20, fontWeight: "bold", marginBottom: 5 },
-  major: { fontSize: 14, color: "#888" },
-
-  // 캠퍼스 선택 스타일 추가
-  campusLabel: {
-    fontSize: 14,
-    color: "#333",
-    fontWeight: "bold",
-    marginBottom: 8,
-    marginTop: 10,
-  },
-  campusContainer: { flexDirection: "row", gap: 10, marginBottom: 25 },
-  campusButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#ddd",
-    backgroundColor: "#fff",
+    width: 28,
+    height: 28,
+    borderRadius: Radius.full,
+    backgroundColor: Palette.brand,
     alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: Palette.white,
   },
-  campusActive: { backgroundColor: "#333", borderColor: "#333" },
-  campusText: { color: "#666", fontSize: 14, fontWeight: "500" },
-  campusActiveText: { color: "#fff", fontWeight: "bold" },
 
-  menuContainer: { padding: 20 },
-  menuItem: {
+  summary: { alignItems: "center" },
+  name: { ...Typo.title, fontSize: 21 },
+  bio: {
+    ...Typo.body,
+    marginTop: 6,
+    textAlign: "center",
+  },
+  bioEmpty: { color: Palette.gray400 },
+  summaryMetaRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f5f5f5",
+    gap: 6,
+    marginTop: Spacing.sm,
   },
-  menuText: { fontSize: 16, marginLeft: 15, color: "#333" },
-  logoutButton: {
-    marginTop: 10,
-    marginHorizontal: 20,
-    marginBottom: 30,
-    backgroundColor: "#f5f5f5",
-    padding: 15,
-    borderRadius: 10,
+  major: { ...Typo.caption, fontSize: 14 },
+  editButton: {
+    flexDirection: "row",
     alignItems: "center",
+    gap: 5,
+    marginTop: Spacing.xl,
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: 11,
+    borderRadius: Radius.full,
+    backgroundColor: Palette.gray100,
   },
-  logoutText: { color: "#FF6B6B", fontWeight: "bold" },
-
-  // 모달 전용 스타일 추가
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalContent: {
-    width: "90%",
-    backgroundColor: "#fff",
-    borderRadius: 20,
-    padding: 25,
-    alignItems: "center",
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 20,
-    color: "#333",
+  editButtonText: {
+    fontSize: 14,
+    fontWeight: "700",
+    letterSpacing: -0.3,
+    color: Palette.gray700,
   },
 
-  imageScroll: { flexDirection: "row", marginBottom: 25 },
-  imageWrapper: {
-    marginRight: 15,
-    borderRadius: 40,
-    borderWidth: 3,
+  editForm: { width: "100%" },
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    letterSpacing: -0.2,
+    color: Palette.gray500,
+    marginBottom: Spacing.sm,
+  },
+  bioInput: {
+    height: 84,
+    paddingTop: 14,
+    textAlignVertical: "top",
+  },
+  counter: {
+    ...Typo.caption,
+    color: Palette.gray400,
+    alignSelf: "flex-end",
+    marginTop: -12,
+    marginBottom: Spacing.lg,
+  },
+  helperText: {
+    ...Typo.caption,
+    color: Palette.gray400,
+    marginBottom: Spacing.xl,
+  },
+
+  mbtiGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  mbtiCell: {
+    width: "22%",
+    flexGrow: 1,
+    paddingVertical: 11,
+    borderRadius: Radius.md,
+    borderWidth: 1.5,
     borderColor: "transparent",
+    backgroundColor: Palette.gray100,
+    alignItems: "center",
   },
-  selectedImageWrapper: { borderColor: "#333" },
-  thumbnail: { width: 70, height: 70, borderRadius: 35 },
+  mbtiCellActive: {
+    backgroundColor: Palette.brandWeak,
+    borderColor: Palette.brand,
+  },
+  mbtiText: {
+    fontSize: 13,
+    fontWeight: "600",
+    letterSpacing: -0.3,
+    color: Palette.gray500,
+  },
+  mbtiTextActive: { color: Palette.brandText, fontWeight: "700" },
 
-  modalBtnRow: { flexDirection: "row", gap: 10, width: "100%" },
-  cancelBtn: {
+  cancelButton: {
+    alignSelf: "center",
+    marginTop: Spacing.md,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+  },
+  cancelButtonText: {
+    fontSize: 15,
+    fontWeight: "600",
+    letterSpacing: -0.3,
+    color: Palette.gray500,
+  },
+
+  infoSection: {
+    paddingHorizontal: Spacing.screen,
+    paddingTop: Spacing.xl,
+    paddingBottom: Spacing.lg,
+  },
+  infoHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  infoTitle: Typo.section,
+  infoDesc: {
+    ...Typo.caption,
+    marginTop: 6,
+    lineHeight: 19,
+  },
+  infoList: {
+    marginTop: Spacing.lg,
+    borderRadius: Radius.md,
+    backgroundColor: Palette.gray50,
+    paddingHorizontal: Spacing.lg,
+  },
+  infoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+    paddingVertical: 14,
+  },
+  infoLabel: {
+    width: 78,
+    fontSize: 14,
+    fontWeight: "600",
+    letterSpacing: -0.3,
+    color: Palette.gray500,
+  },
+  infoValue: {
     flex: 1,
-    paddingVertical: 15,
-    borderRadius: 10,
-    backgroundColor: "#f5f5f5",
+    fontSize: 15,
+    fontWeight: "600",
+    letterSpacing: -0.3,
+    color: Palette.gray800,
+  },
+  infoEmpty: {
+    ...Typo.caption,
+    marginTop: Spacing.lg,
+  },
+
+  menuSection: { paddingVertical: Spacing.xs },
+  menuRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+    paddingHorizontal: Spacing.screen,
+    paddingVertical: Spacing.lg,
+  },
+  menuText: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: "500",
+    letterSpacing: -0.3,
+    color: Palette.gray800,
+  },
+
+  logoutRow: {
+    paddingHorizontal: Spacing.screen,
+    paddingVertical: Spacing.lg,
+  },
+  logoutText: {
+    fontSize: 15,
+    fontWeight: "600",
+    letterSpacing: -0.3,
+    color: Palette.gray500,
+  },
+
+  sheetBackdrop: { flex: 1, backgroundColor: "rgba(25,31,40,0.45)" },
+  sheet: {
+    backgroundColor: Palette.white,
+    borderTopLeftRadius: Radius.xxl,
+    borderTopRightRadius: Radius.xxl,
+    paddingHorizontal: Spacing.screen,
+    paddingTop: Spacing.md,
+    ...Shadow.modal,
+  },
+  sheetHandle: {
+    alignSelf: "center",
+    width: 40,
+    height: 4,
+    borderRadius: Radius.full,
+    backgroundColor: Palette.gray200,
+    marginBottom: Spacing.xl,
+  },
+  sheetTitle: Typo.title,
+  sheetDesc: { ...Typo.caption, marginTop: 6, marginBottom: Spacing.xl },
+
+  avatarGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    rowGap: Spacing.md,
+    marginBottom: Spacing.xxl,
+  },
+  thumbWrap: {
+    width: "23%",
+    aspectRatio: 1,
+    borderRadius: Radius.full,
+    borderWidth: 2.5,
+    borderColor: "transparent",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  thumbSelected: { borderColor: Palette.brand },
+  thumb: { width: "88%", height: "88%", borderRadius: Radius.full },
+
+  sheetActions: { flexDirection: "row", gap: Spacing.sm },
+  sheetCancel: {
+    flex: 1,
+    paddingVertical: 16,
+    borderRadius: Radius.md,
+    backgroundColor: Palette.gray100,
     alignItems: "center",
   },
-  cancelBtnText: { color: "#666", fontSize: 16, fontWeight: "bold" },
-  confirmBtn: {
-    flex: 1,
-    paddingVertical: 15,
-    borderRadius: 10,
-    backgroundColor: "#333",
+  sheetCancelText: {
+    fontSize: 16,
+    fontWeight: "700",
+    letterSpacing: -0.3,
+    color: Palette.gray700,
+  },
+  sheetConfirm: {
+    flex: 2,
+    paddingVertical: 16,
+    borderRadius: Radius.md,
+    backgroundColor: Palette.brand,
     alignItems: "center",
   },
-  confirmBtnText: { color: "#fff", fontSize: 16, fontWeight: "bold" },
+  sheetConfirmText: {
+    fontSize: 16,
+    fontWeight: "700",
+    letterSpacing: -0.3,
+    color: Palette.white,
+  },
 });
