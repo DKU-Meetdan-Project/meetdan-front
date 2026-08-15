@@ -54,16 +54,18 @@ const requestStatusView = (row: RequestRow) => {
 
 export default function HistoryTab() {
   const router = useRouter();
-  const { receivedRequests, sentRequests, posts, myTeams, matches } =
+  const { receivedRequests, sentRequests, posts, myTeams, matchedTeams, matches } =
     useStore();
   const [activeTab, setActiveTab] = useState<TabType>("RECEIVED");
 
-  // 게시판에서 내려간 팀도 신청 기록에는 남아야 하므로 내 팀 목록까지 뒤진다
+  // 게시판에서 내려간 팀(매칭 성사 포함)도 신청 기록에는 남아야 하므로
+  // 내 팀 목록과 매칭 보관함까지 뒤진다
   const findTeam = useMemo(
     () => (teamId: number) =>
       posts.find((p) => p.id === teamId) ??
-      myTeams.find((t) => t.id === teamId),
-    [posts, myTeams],
+      myTeams.find((t) => t.id === teamId) ??
+      matchedTeams.find((t) => t.id === teamId),
+    [posts, myTeams, matchedTeams],
   );
 
   // 신청 데이터에 상대 팀 정보를 붙이고, 찾지 못한 건 걸러낸다

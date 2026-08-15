@@ -1,7 +1,7 @@
 // 파일: app/(tabs)/index.tsx
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FlatList,
   Pressable,
@@ -32,9 +32,20 @@ const CAMPUS_FILTERS: CampusFilter[] = ["전체", "죽전", "천안"];
 export default function HomeTab() {
   const router = useRouter();
   const { posts } = useStore();
+  const currentUser = useStore((state) => state.currentUser);
 
   const [data, setData] = useState<Team[]>([]);
-  const [campus, setCampus] = useState<CampusFilter>("전체");
+  // 기본값은 내 캠퍼스. 아직 내 정보가 안 왔으면 전체로 두고 도착하면 한 번만 맞춘다.
+  const [campus, setCampus] = useState<CampusFilter>(
+    currentUser?.campus ?? "전체",
+  );
+  const didApplyMyCampus = useRef(currentUser != null);
+
+  useEffect(() => {
+    if (didApplyMyCampus.current || !currentUser) return;
+    didApplyMyCampus.current = true;
+    setCampus(currentUser.campus);
+  }, [currentUser]);
 
   useFocusEffect(
     useCallback(() => {

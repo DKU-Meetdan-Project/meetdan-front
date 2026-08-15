@@ -34,6 +34,7 @@ import {
   Spacing,
   Typo,
 } from "@/constants/theme";
+import { useStore } from "@/store/useStore";
 import * as AuthService from "@/utils/auth";
 import type { Account, UserProfile } from "@/utils/auth";
 
@@ -79,7 +80,11 @@ export default function ProfileTab() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  // 회원가입 때 확정된 정보 (읽기 전용)
+  // 로그인한 내 정보 (전역). 학과·성별·캠퍼스의 기준값
+  const currentUser = useStore((state) => state.currentUser);
+  const clearCurrentUser = useStore((state) => state.clearCurrentUser);
+
+  // 회원가입 때 확정된 정보 (읽기 전용). 이메일·아이디는 여기에만 있다
   const [account, setAccount] = useState<Account | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -153,19 +158,43 @@ export default function ProfileTab() {
       {
         text: "로그아웃",
         style: "destructive",
-        onPress: () => router.replace("/login"),
+        onPress: async () => {
+          // 토큰과 전역 유저 정보를 함께 비운다.
+          // 안 비우면 재시작 시 다시 로그인된 상태로 들어가거나
+          // 다음 계정에 이전 유저 정보가 남는다.
+          await AuthService.removeToken();
+          clearCurrentUser();
+          router.replace("/login");
+        },
       },
     ]);
   };
 
   // 편집 중에는 미리보기가 바로 보이도록 draft 값을 쓴다
   const shown = isEditing ? draft : profile;
-  const displayName = shown.nickname.trim() || account?.name || "밋단 회원";
+
+  /**
+   * 화면에 뿌릴 내 정보.
+   * 전역 currentUser를 우선하고, 아직 안 채워졌으면 기기에 저장된 가입 정보로 메운다.
+   * 이메일·아이디는 currentUser에 없으므로 항상 account에서 가져온다.
+   */
+  const info = {
+    name: account?.name ?? currentUser?.nickname ?? null,
+    gender: currentUser?.gender ?? account?.gender ?? null,
+    campus: currentUser?.campus ?? account?.campus ?? null,
+    dept: currentUser?.dept ?? account?.dept ?? null,
+    email: account?.email ?? null,
+    userId: account?.id ?? null,
+  };
+  const hasInfo = !!(info.name || info.dept || info.campus);
+
+  const displayName =
+    shown.nickname.trim() || info.name || currentUser?.nickname || "밋단 회원";
   // 저장된 인덱스가 에셋 개수를 벗어나도 화면이 깨지지 않게
   const avatarSource =
     profileImages[shown.avatarIdx] ?? profileImages[0];
-  const campusColor = account
-    ? CampusColor[account.campus as keyof typeof CampusColor]
+  const campusColor = info.campus
+    ? CampusColor[info.campus as keyof typeof CampusColor]
     : undefined;
 
   if (isLoading) {
@@ -215,7 +244,7 @@ export default function ProfileTab() {
                 onChangeText={(text) =>
                   setDraft((prev) => ({ ...prev, nickname: text }))
                 }
-                placeholder={account?.name ?? "닉네임을 입력하세요"}
+                placeholder={info.name ?? "닉네임을 입력하세요"}
                 maxLength={NICKNAME_MAX}
               />
 
@@ -291,11 +320,11 @@ export default function ProfileTab() {
               </Text>
 
               <View style={styles.summaryMetaRow}>
-                {!!account && (
-                  <Badge label={`${account.campus} 캠퍼스`} colors={campusColor} />
+                {!!info.campus && (
+                  <Badge label={`${info.campus} 캠퍼스`} colors={campusColor} />
                 )}
                 {!!shown.mbti && <Badge label={shown.mbti} tone="brand" />}
-                {!!account && <Text style={styles.major}>{account.dept}</Text>}
+                {!!info.dept && <Text style={styles.major}>{info.dept}</Text>}
               </View>
 
               <PressScale
@@ -331,17 +360,23 @@ export default function ProfileTab() {
             변경이 필요하면 학생증 재인증을 진행해주세요.
           </Text>
 
-          {account ? (
+          {hasInfo ? (
             <View style={styles.infoList}>
-              <InfoRow label="이름" value={account.name} />
-              <InfoRow
-                label="성별"
-                value={account.gender === "M" ? "남성" : "여성"}
-              />
-              <InfoRow label="캠퍼스" value={`${account.campus}캠퍼스`} />
-              <InfoRow label="학과" value={account.dept} />
-              <InfoRow label="학교 이메일" value={account.email} />
-              <InfoRow label="아이디" value={account.id} />
+              {!!info.name && <InfoRow label="이름" value={info.name} />}
+              {!!info.gender && (
+                <InfoRow
+                  label="성별"
+                  value={info.gender === "M" ? "남성" : "여성"}
+                />
+              )}
+              {!!info.campus && (
+                <InfoRow label="캠퍼스" value={`${info.campus}캠퍼스`} />
+              )}
+              {!!info.dept && <InfoRow label="학과" value={info.dept} />}
+              {!!info.email && (
+                <InfoRow label="학교 이메일" value={info.email} />
+              )}
+              {!!info.userId && <InfoRow label="아이디" value={info.userId} />}
             </View>
           ) : (
             <Text style={styles.infoEmpty}>

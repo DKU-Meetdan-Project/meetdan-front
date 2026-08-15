@@ -1,4 +1,7 @@
 // 파일 경로: app/api/client.ts (폴더 없으면 만드세요!)
+import type { CurrentUser } from "@/store/useStore";
+import * as AuthService from "@/utils/auth";
+
 type ApiResponse = {
   code: number;
   message?: string; // message는 있을 수도 있고 없을 수도 있음 (?)
@@ -16,6 +19,42 @@ type SignupPayload = {
   gender: "M" | "F" | null;
   campus: string;
   dept: string;
+};
+
+// 회원가입 최종 제출용. 비밀번호는 서버에서만 다루므로 기기에 남기지 않는다.
+type SignupRequest = {
+  name: string;
+  gender: "M" | "F";
+  campus: string;
+  dept: string;
+  email: string;
+  userId: string;
+};
+
+// 아직 가입 정보가 없을 때 쓰는 기본값 (개발 편의용)
+const FALLBACK_USER: CurrentUser = {
+  id: 1,
+  nickname: "코딩하는 곰",
+  dept: "소프트웨어학과",
+  gender: "M",
+  campus: "죽전",
+};
+
+/**
+ * 서버 대신 기기에 저장된 가입 정보로 내 정보를 만들어 줍니다.
+ * 실제 API가 붙으면 이 함수는 사라지고 서버 응답을 그대로 쓰면 됩니다.
+ */
+const buildMockUser = async (): Promise<CurrentUser> => {
+  const account = await AuthService.getAccount();
+  if (!account) return FALLBACK_USER;
+
+  return {
+    id: 1,
+    nickname: account.name,
+    dept: account.dept,
+    gender: account.gender,
+    campus: account.campus as CurrentUser["campus"],
+  };
 };
 
 export const API = {
@@ -47,40 +86,62 @@ export const API = {
     return { code: 200, message: "인증이 완료되었습니다." };
   },
 
-  // ✅ [로그인/회원가입]
-  login: async (email: string): Promise<ApiResponse> => {
-    console.log(`[Mock] 로그인 시도: ${email}`);
+  // 🧪 [Mock] 회원가입
+  // 실제 서버가 붙으면 payload를 그대로 POST하고 응답 토큰만 받아 쓰면 됩니다.
+  signup: async (payload: SignupRequest): Promise<ApiResponse> => {
+    console.log(`[Mock] 회원가입 시도: ${payload.userId}`, payload);
     await delay(1000);
 
-    // 성공 시 가짜 토큰 발급
+    return {
+      code: 200,
+      message: "회원가입이 완료되었습니다.",
+      data: {
+        accessToken: "fake-jwt-token-dankook-student",
+        user: {
+          id: 1,
+          userId: payload.userId,
+          nickname: payload.name,
+          name: payload.name,
+          dept: payload.dept,
+          gender: payload.gender,
+          campus: payload.campus as CurrentUser["campus"],
+          email: payload.email,
+        },
+      },
+    };
+  },
+
+  // ✅ [로그인]
+  // 비밀번호는 서버 검증용으로만 전달하고, 어디에도 저장하지 않습니다.
+  login: async (id: string, password: string): Promise<ApiResponse> => {
+    console.log(`[Mock] 로그인 시도: ${id} (pw ${password.length}자)`);
+    await delay(1000);
+
+    if (!id || !password) {
+      return { code: 400, message: "아이디와 비밀번호를 입력해주세요." };
+    }
+
+    // 성공 시 가짜 토큰 + 내 정보(가입 때 입력한 값) 발급
+    const user = await buildMockUser();
     return {
       code: 200,
       data: {
         accessToken: "fake-jwt-token-dankook-student",
         user: {
           message: "로그인 성공!",
-          id: 1,
-          nickname: "코딩하는 곰",
-          dept: "소프트웨어학과",
-          gender: "M", // 성별 (M/F)
-          campus: "죽전", // 캠퍼스 (죽전/천안)
+          userId: id,
+          ...user,
         },
       },
     };
   },
 
   // ✅ [내 정보] 토큰으로 내 정보 가져오기 (성별/캠퍼스 포함)
-  getMe: async () => {
+  getMe: async (): Promise<ApiResponse> => {
     await delay(500);
     return {
       code: 200,
-      data: {
-        id: 1,
-        nickname: "코딩하는 곰",
-        dept: "소프트웨어학과",
-        gender: "M",
-        campus: "죽전",
-      },
+      data: await buildMockUser(),
     };
   },
 

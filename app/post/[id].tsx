@@ -52,13 +52,25 @@ export default function PostDetail() {
       return;
     }
 
-    // ✅ 4. sendMatchRequest (Zustand Action) 호출
-    const success = sendMatchRequest(myTeam.id, targetPost.id);
+    // 과팅이니 이성 팀에게만 신청할 수 있다
+    if (myTeam.gender === targetPost.gender) {
+      Alert.alert(
+        "신청할 수 없어요",
+        "이성 팀에게만 신청할 수 있어요. 다른 팀을 찾아보세요.",
+      );
+      return;
+    }
 
-    if (success) {
+    // ✅ 4. sendMatchRequest (Zustand Action) 호출
+    const result = sendMatchRequest(myTeam.id, targetPost.id);
+
+    if (result.ok) {
       Alert.alert("신청 완료! 💌", "상대방이 수락하면 채팅방이 열립니다.", [
         { text: "확인", onPress: () => router.back() },
       ]);
+    } else {
+      // 중복 신청·매칭 완료 등 막힌 이유를 그대로 보여준다
+      Alert.alert("신청할 수 없어요", result.message);
     }
   };
 

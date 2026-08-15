@@ -8,7 +8,8 @@ export interface Team {
   campus: "죽전" | "천안";
   dept: string;
   gender: "M" | "F";
-  status: "RECRUITING" | "ACTIVE" | "FULL" | "READY";
+  /** MATCHED = 매칭이 성사된 팀. 더 이상 게시판에 노출되지 않고 신청도 받지 않는다. */
+  status: "RECRUITING" | "ACTIVE" | "FULL" | "READY" | "MATCHED";
   content: string;
   count: number;
   currentCount: number;
@@ -39,6 +40,13 @@ export interface Match {
   /** 선택 사항. 없어도 채팅·매칭은 그대로 굴러간다. */
   confirmedPlan?: ConfirmedPlan;
 }
+
+/**
+ * 매칭 신청 결과. 실패 사유마다 안내 문구가 달라야 해서 boolean 대신 객체로 돌려준다.
+ */
+export type SendRequestResult =
+  | { ok: true }
+  | { ok: false; message: string };
 
 // 3. 신청서 데이터 (보낸 것, 받은 것 공통 사용)
 export interface RequestData {
@@ -76,14 +84,37 @@ export interface BlockedUser {
   blockedAt: string;
 }
 
+// 5. 로그인한 나 자신
+/**
+ * 로그인/재시작 시 서버(현재는 mock)에서 받아오는 내 정보.
+ * 회원가입 입력값이 화면 곳곳(프로필, 팀 생성)에서 쓰이도록 여기 한 곳에 둔다.
+ */
+export interface CurrentUser {
+  id: number;
+  nickname: string;
+  dept: string;
+  gender: "M" | "F";
+  campus: "죽전" | "천안";
+}
+
 interface AppState {
+  currentUser: CurrentUser | null;
   posts: Team[];
   myTeams: Team[];
+  /**
+   * 매칭이 성사되어 게시판에서 내려간 팀들.
+   * 활동 내역·채팅방에서 상대 팀 이름과 학과를 계속 찾을 수 있게 보관한다.
+   */
+  matchedTeams: Team[];
   sentRequests: RequestData[]; // ✅ [수정] 타입 통일
   receivedRequests: RequestData[];
   matches: Match[];
   reports: Report[];
   blockedUsers: BlockedUser[];
+
+  setCurrentUser: (user: CurrentUser) => void;
+  /** 로그아웃 시 호출. 다음 계정에 이전 유저 정보가 새지 않게 한다. */
+  clearCurrentUser: () => void;
 
   setPosts: (posts: Team[]) => void;
   addPost: (post: Team) => void;
@@ -91,10 +122,17 @@ interface AppState {
   deleteTeam: (id: number) => void;
   toggleTeamStatus: (id: number, isPublic: boolean) => void;
   simulateJoinMember: (id: number) => void;
+  /**
+   * 초대 코드로 실제 팀에 합류. 코드가 없거나, 이미 속한 팀이거나,
+   * 정원이 찼거나, 매칭이 끝난 팀이면 false.
+   */
   joinTeamByCode: (code: string) => boolean;
   updateTeam: (id: number, updates: Partial<Team>) => void;
 
-  sendMatchRequest: (myTeamId: number, targetTeamId: number) => boolean;
+  sendMatchRequest: (
+    myTeamId: number,
+    targetTeamId: number,
+  ) => SendRequestResult;
   /** 신청 수락. 매칭을 만들고, 두 팀 사이의 대기중 신청을 ACCEPTED로 바꾼다. */
   acceptMatch: (myTeamId: number, partnerTeamId: number) => string;
   /** 신청 거절. 받은 신청 하나를 REJECTED로 바꾼다. */
@@ -136,6 +174,9 @@ const isBetween = (req: RequestData, teamA: number, teamB: number) =>
   (req.senderTeamId === teamB && req.receiverTeamId === teamA);
 
 export const useStore = create<AppState>((set, get) => ({
+  // 0. 로그인 전에는 비어있음. 로그인 또는 앱 재시작 복원 시 채워진다.
+  currentUser: null,
+
   // 1. 초기 데이터
   posts: [
     {
@@ -152,6 +193,7 @@ export const useStore = create<AppState>((set, get) => ({
       timestamp: "방금 전",
       tags: ["#술찌", "#맛집탐방"],
       members: [{ name: "배수지", role: "LEADER" }],
+      inviteCode: "DSGN01", // 초대 코드 합류를 개발 중에 시험해볼 수 있게
     },
     {
       id: 2,
@@ -225,9 +267,13 @@ export const useStore = create<AppState>((set, get) => ({
     },
   ],
 
+  matchedTeams: [],
   matches: [],
   reports: [],
   blockedUsers: [],
+
+  setCurrentUser: (user) => set({ currentUser: user }),
+  clearCurrentUser: () => set({ currentUser: null }),
 
   // ... (기존 액션들 동일) ...
   setPosts: (newPosts) => set({ posts: newPosts }),
@@ -274,24 +320,38 @@ export const useStore = create<AppState>((set, get) => ({
       }),
     })),
   joinTeamByCode: (code) => {
-    if (!code) return false;
-    const friendTeam: Team = {
-      id: Date.now(),
-      title: `친구의 팀 (${code})`,
-      content: "야 빨리 들어와!",
-      dept: "경영학과",
-      gender: "M",
-      campus: "죽전",
-      count: 4,
-      currentCount: 2,
-      age: 24,
-      timestamp: "방금 전",
-      tags: ["#초대받음", "#가보자고"],
-      members: [{ name: "친구(팀장)", role: "LEADER" }],
-      status: "RECRUITING",
-      inviteCode: code,
+    const normalized = code.trim().toUpperCase();
+    if (!normalized) return false;
+
+    const state = get();
+    const hasCode = (t: Team) => t.inviteCode?.toUpperCase() === normalized;
+    // 공개된 팀이든 비공개 팀이든 코드만 맞으면 들어갈 수 있다
+    const target =
+      state.posts.find(hasCode) ?? state.myTeams.find(hasCode) ?? null;
+
+    if (!target) return false;
+    if (state.myTeams.some((t) => t.id === target.id)) return false; // 이미 속한 팀
+    if (target.status === "MATCHED") return false; // 매칭이 끝난 팀
+    if (target.currentCount >= target.count) return false; // 정원 초과
+
+    const me = state.currentUser;
+    const nextCount = target.currentCount + 1;
+    const joined: Team = {
+      ...target,
+      currentCount: nextCount,
+      members: [
+        ...target.members,
+        { name: me?.nickname ?? "나", role: "MEMBER" },
+      ],
+      // 인원이 다 차면 준비완료로 (simulateJoinMember와 동일한 규칙)
+      status: nextCount === target.count ? "READY" : target.status,
     };
-    set((state) => ({ myTeams: [friendTeam, ...state.myTeams] }));
+
+    set((s) => ({
+      myTeams: [joined, ...s.myTeams],
+      // 게시판에 올라와 있던 팀이면 인원 현황도 같이 갱신한다
+      posts: s.posts.map((p) => (p.id === joined.id ? joined : p)),
+    }));
     return true;
   },
   updateTeam: (id, updates) =>
@@ -308,7 +368,37 @@ export const useStore = create<AppState>((set, get) => ({
     const myTeam = state.myTeams.find((t) => t.id === myTeamId);
     const targetTeam = state.posts.find((p) => p.id === targetTeamId);
 
-    if (!myTeam || !targetTeam) return false;
+    if (!myTeam || !targetTeam) {
+      return { ok: false, message: "팀 정보를 찾을 수 없어요." };
+    }
+
+    // 이미 매칭이 끝난 팀은 더 이상 신청을 주고받지 않는다
+    if (targetTeam.status === "MATCHED") {
+      return {
+        ok: false,
+        message: "이미 매칭이 성사된 팀이에요. 다른 팀을 찾아보세요.",
+      };
+    }
+    if (myTeam.status === "MATCHED") {
+      return {
+        ok: false,
+        message: "이미 매칭이 성사된 팀으로는 신청할 수 없어요.",
+      };
+    }
+
+    // 같은 팀에 대기중인 신청이 이미 있으면 중복으로 쌓지 않는다
+    const alreadySent = state.sentRequests.some(
+      (r) =>
+        r.senderTeamId === myTeamId &&
+        r.receiverTeamId === targetTeamId &&
+        r.status === "WAITING",
+    );
+    if (alreadySent) {
+      return {
+        ok: false,
+        message: "이미 신청한 팀이에요. 상대방의 응답을 기다려주세요.",
+      };
+    }
 
     const newRequest: RequestData = {
       id: Date.now(),
@@ -321,7 +411,7 @@ export const useStore = create<AppState>((set, get) => ({
     set((state) => ({
       sentRequests: [newRequest, ...state.sentRequests],
     }));
-    return true;
+    return { ok: true };
   },
 
   acceptMatch: (myTeamId, partnerTeamId) => {
@@ -347,14 +437,34 @@ export const useStore = create<AppState>((set, get) => ({
           : r,
       );
 
-    set((state) => ({
-      // 이미 있는 매칭이면 중복 생성하지 않는다
-      matches: state.matches.some((m) => m.id === matchId)
-        ? state.matches
-        : [newMatch, ...state.matches],
-      receivedRequests: accept(state.receivedRequests),
-      sentRequests: accept(state.sentRequests),
-    }));
+    // 매칭된 두 팀은 MATCHED로 바꾸고 게시판(posts)에서 내린다.
+    const isMatchedTeam = (teamId: number) =>
+      teamId === myTeamId || teamId === partnerTeamId;
+
+    set((state) => {
+      // 게시판에서 내리기 전에 두 팀을 보관해둔다 (id 중복은 한 번만)
+      const archived: Team[] = [];
+      for (const team of [...state.posts, ...state.myTeams]) {
+        if (!isMatchedTeam(team.id)) continue;
+        if (archived.some((t) => t.id === team.id)) continue;
+        if (state.matchedTeams.some((t) => t.id === team.id)) continue;
+        archived.push({ ...team, status: "MATCHED" });
+      }
+
+      return {
+        // 이미 있는 매칭이면 중복 생성하지 않는다
+        matches: state.matches.some((m) => m.id === matchId)
+          ? state.matches
+          : [newMatch, ...state.matches],
+        receivedRequests: accept(state.receivedRequests),
+        sentRequests: accept(state.sentRequests),
+        myTeams: state.myTeams.map((t) =>
+          isMatchedTeam(t.id) ? { ...t, status: "MATCHED" as const } : t,
+        ),
+        posts: state.posts.filter((p) => !isMatchedTeam(p.id)),
+        matchedTeams: [...archived, ...state.matchedTeams],
+      };
+    });
 
     return matchId;
   },

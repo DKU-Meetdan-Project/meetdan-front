@@ -14,10 +14,15 @@ import { View, StyleSheet } from "react-native";
 // ❌ Animated는 삭제했습니다!
 
 import * as AuthService from "../utils/auth";
+import { API } from "@/api/client";
 import MeetDanLogo from "@/components/Logo";
+import { useStore } from "@/store/useStore";
 
 // 앱이 로딩될 때까지 네이티브 화면 유지 (우리가 수동으로 끌 것임)
 SplashScreen.preventAutoHideAsync();
+
+/** 로그인 없이 들어갈 수 있는 화면들 */
+const PUBLIC_ROUTES = ["login", "signupScreen"];
 
 export default function RootLayout() {
   const [loaded] = [true]; // 폰트 로딩 (가정)
@@ -41,10 +46,22 @@ export default function RootLayout() {
 
     const checkLoginStatus = async () => {
       try {
-        await new Promise((resolve) => setTimeout(resolve, 2000)); // 💤 인위적 딜레이 (로고 감상용)
         const token = await AuthService.getToken();
-        const inAuthGroup = segments[0] === "login";
+        const inAuthGroup = PUBLIC_ROUTES.includes(segments[0] as string);
         const inRoot = (segments as string[]).length === 0;
+
+        // 앱을 껐다 켜면 전역 상태는 비어 있으므로 내 정보를 다시 받아온다
+        if (token && !useStore.getState().currentUser) {
+          try {
+            const me = await API.getMe();
+            if (me.code === 200 && me.data) {
+              useStore.getState().setCurrentUser(me.data);
+            }
+          } catch (e) {
+            // 내 정보를 못 받아와도 라우팅은 계속 진행한다
+            console.error("내 정보 복원 실패:", e);
+          }
+        }
 
         // 로그인 여부에 따라 납치
         if (token && (inAuthGroup || inRoot)) {
@@ -62,8 +79,9 @@ export default function RootLayout() {
 
     checkLoginStatus();
 
-    // 🛡️ 안전장치: 혹시라도 로직이 꼬이면 1.5초 뒤에 강제로 문 열기
-    const timer = setTimeout(() => setIsReady(true), 1500);
+    // 🛡️ 안전장치: 로그인 체크가 예기치 않게 멈추면 3초 뒤에 강제로 문 열기
+    // (정상 흐름에서는 체크가 먼저 끝나므로 이 타이머는 발동하지 않습니다)
+    const timer = setTimeout(() => setIsReady(true), 3000);
     return () => clearTimeout(timer);
   }, [loaded, navigationState?.key]);
 

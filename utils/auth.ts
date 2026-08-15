@@ -32,9 +32,12 @@ export const removeToken = async () => {
   }
 };
 
+/**
+ * 회원가입 때 확정되는 내 계정 정보(표시용).
+ * ⚠️ 비밀번호는 어떤 형태로도 기기에 저장하지 않는다. 인증은 토큰으로만 한다.
+ */
 export interface Account {
   id: string;
-  password: string;
   name: string;
   gender: "M" | "F";
   campus: string; // "죽전" | "천안"
@@ -42,7 +45,7 @@ export interface Account {
   email: string;
 }
 
-// ✅ 회원가입 시 입력한 계정 정보 저장
+// ✅ 회원가입 시 입력한 계정 정보 저장 (비밀번호 제외)
 export const saveAccount = async (account: Account) => {
   try {
     await AsyncStorage.setItem(ACCOUNT_KEY, JSON.stringify(account));
@@ -51,7 +54,7 @@ export const saveAccount = async (account: Account) => {
   }
 };
 
-// ✅ 로그인 시 저장된 계정 정보 확인
+// ✅ 저장된 계정 정보 확인 (프로필 화면 표시용)
 export const getAccount = async (): Promise<Account | null> => {
   try {
     const raw = await AsyncStorage.getItem(ACCOUNT_KEY);

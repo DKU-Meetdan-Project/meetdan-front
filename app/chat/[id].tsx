@@ -165,6 +165,7 @@ export default function ChatRoom() {
     matches,
     posts,
     myTeams,
+    matchedTeams,
     blockedUsers,
     submitReport,
     blockUser,
@@ -224,11 +225,13 @@ export default function ChatRoom() {
   }, [id, match, posts]);
 
   // 매칭에 묶인 실제 팀. 학과·인원수를 여기서 가져온다.
+  // 매칭이 성사되면 게시판에서 내려가므로 보관함(matchedTeams)까지 본다.
   const findTeam = (teamId?: number) =>
     teamId === undefined
       ? undefined
       : (posts.find((p) => p.id === teamId) ??
-        myTeams.find((t) => t.id === teamId));
+        myTeams.find((t) => t.id === teamId) ??
+        matchedTeams.find((t) => t.id === teamId));
 
   const partnerTeam = findTeam(match?.partnerTeamId);
   const myTeam = findTeam(match?.myTeamId);

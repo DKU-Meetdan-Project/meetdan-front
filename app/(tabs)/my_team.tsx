@@ -68,9 +68,12 @@ export default function MyTeamTab() {
     if (joinTeamByCode(inputCode)) {
       setJoinModalVisible(false);
       setInputCode("");
-      Alert.alert("참가 완료", `친구 팀(${inputCode})에 합류했어요.`);
+      Alert.alert("참가 완료", `친구 팀(${inputCode.trim()})에 합류했어요.`);
     } else {
-      Alert.alert("참가할 수 없어요", "코드가 올바르지 않거나 이미 가입된 팀이에요.");
+      Alert.alert(
+        "참가할 수 없어요",
+        "코드가 올바르지 않거나, 이미 가입한 팀이거나, 정원이 다 찼어요.",
+      );
     }
   };
 

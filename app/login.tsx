@@ -12,15 +12,16 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
-import AsyncStorage from "@react-native-async-storage/async-storage"; // ✅ 직접 import
 
 import { InputBox } from "../components/InputBox";
 import { MainButton } from "@/components/MainButton";
 import { API } from "@/api/client";
+import { useStore } from "@/store/useStore";
 import * as AuthService from "@/utils/auth";
 
 export default function Login() {
   const router = useRouter();
+  const setCurrentUser = useStore((state) => state.setCurrentUser);
 
   const [id, setId] = useState("");
   const [password, setPassword] = useState("");
@@ -40,24 +41,24 @@ export default function Login() {
     try {
       setIsLoading(true);
 
-      // 2. 회원가입 시 저장해둔 아이디/비밀번호와 대조
-      const credentials = await AuthService.getAccount();
-      if (!credentials) {
+      // 2. 가입된 계정이 있는지 확인 (비밀번호 검증은 서버 몫)
+      const account = await AuthService.getAccount();
+      if (!account) {
         Alert.alert(
           "알림",
           "가입된 계정이 없습니다. 먼저 회원가입을 진행해주세요.",
         );
         return;
       }
-      if (credentials.id !== id || credentials.password !== password) {
+      if (account.id !== id) {
         Alert.alert("로그인 실패", "아이디 또는 비밀번호가 일치하지 않습니다.");
         return;
       }
 
       console.log(`🚀 [로그인 시도] ID: ${id}`);
 
-      // 3. API 호출
-      const result = await API.login("test@dankook.ac.kr"); // 테스트용 하드코딩
+      // 3. API 호출 (입력값 그대로 전달)
+      const result = await API.login(id, password);
       console.log("📥 [API 응답]", JSON.stringify(result, null, 2));
 
       if (result.code === 200) {
@@ -70,13 +71,23 @@ export default function Login() {
           return;
         }
 
-        console.log("✅ 토큰 발견:", token);
-
-        // 5. [핵심] 여기서 직접 저장 (AuthService 제거)
-        await AsyncStorage.setItem("user_auth_token", token);
+        // 5. 토큰만 저장 (비밀번호는 저장하지 않음)
+        await AuthService.saveToken(token);
         console.log("💾 토큰 저장 완료! 메인으로 이동합니다.");
 
-        // 6. 강제 이동
+        // 6. 응답에 담겨온 내 정보를 전역 상태에 올려둔다
+        const user = result.data?.user;
+        if (user) {
+          setCurrentUser({
+            id: user.id,
+            nickname: user.nickname,
+            dept: user.dept,
+            gender: user.gender,
+            campus: user.campus,
+          });
+        }
+
+        // 7. 강제 이동
         router.replace("/(tabs)");
       } else {
         Alert.alert("로그인 실패", result.message || "다시 시도해주세요.");

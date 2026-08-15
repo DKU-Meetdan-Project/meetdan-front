@@ -18,6 +18,7 @@ import { useStore, Team } from "../store/useStore";
 export default function Write() {
   const router = useRouter();
   const { joinTeam } = useStore();
+  const currentUser = useStore((state) => state.currentUser);
 
   // ✅ [추가] 캠퍼스 선택 상태 (기본값: 죽전)
   const [campus, setCampus] = useState<"죽전" | "천안">("죽전");
@@ -34,6 +35,15 @@ export default function Write() {
       return;
     }
 
+    // 팀의 학과·성별은 내 정보에서 가져오므로, 없으면 만들 수 없다
+    if (!currentUser) {
+      Alert.alert(
+        "알림",
+        "내 정보를 불러오지 못했어요. 다시 로그인한 뒤 시도해주세요.",
+      );
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -44,8 +54,8 @@ export default function Write() {
         age: parseInt(age),
         count: count,
         currentCount: 1,
-        dept: "소프트웨어학과",
-        gender: "M",
+        dept: currentUser.dept, // ✅ [수정] 내 학과 반영
+        gender: currentUser.gender, // ✅ [수정] 내 성별 반영
         campus: campus, // ✅ [수정] 사용자가 선택한 캠퍼스 값 적용
         tags: ["#신규", "#설렘"],
         status: "RECRUITING",

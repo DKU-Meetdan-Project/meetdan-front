@@ -285,22 +285,44 @@ export default function SignupScreen() {
 
       try {
         setIsSubmitting(true);
-        // 백엔드 연동 전이라 계정 정보를 기기(AsyncStorage)에 저장해두고
-        // 로그인 화면에서 이 값과 대조합니다.
+
+        // 비밀번호는 서버에만 보내고 기기에는 남기지 않습니다.
+        const result = await API.signup({
+          name: name.trim(),
+          gender,
+          campus,
+          dept,
+          email: email.trim(),
+          userId: userId.trim(),
+        });
+
+        if (result.code !== 200) {
+          Alert.alert("회원가입 실패", result.message ?? "다시 시도해주세요.");
+          return;
+        }
+
+        const token = result.data?.accessToken;
+        if (!token) {
+          Alert.alert("오류", "서버 응답에 토큰이 없습니다.");
+          return;
+        }
+
+        // 발급받은 토큰 저장 + 화면 표시용 계정 정보(비밀번호 제외) 저장
+        await AuthService.saveToken(token);
         await AuthService.saveAccount({
           id: userId.trim(),
-          password,
           name: name.trim(),
           gender,
           campus,
           dept,
           email: email.trim(),
         });
+
         Alert.alert("회원가입 완료", "밋단에 오신 것을 환영해요!", [
           { text: "확인", onPress: () => router.replace("/login") },
         ]);
       } catch (e) {
-        Alert.alert("오류", "계정 정보 저장 중 문제가 발생했습니다.");
+        Alert.alert("오류", "회원가입 처리 중 문제가 발생했습니다.");
       } finally {
         setIsSubmitting(false);
       }

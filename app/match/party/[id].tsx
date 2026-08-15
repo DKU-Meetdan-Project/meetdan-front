@@ -17,8 +17,14 @@ import { useStore, Team } from "../../../store/useStore";
 export default function MatchPartyDetail() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
-  const { posts, myTeams, receivedRequests, acceptMatch, rejectMatchRequest } =
-    useStore(); // 실제로는 '요청 온 팀 목록'에서 찾아야 하지만, 지금은 전체 팀에서 찾음
+  const {
+    posts,
+    myTeams,
+    matchedTeams,
+    receivedRequests,
+    acceptMatch,
+    rejectMatchRequest,
+  } = useStore(); // 실제로는 '요청 온 팀 목록'에서 찾아야 하지만, 지금은 전체 팀에서 찾음
   const [team, setTeam] = useState<Team | null>(null);
 
   // 이 화면은 상대 팀만 알고 들어온다. 우리 팀 id는 이 팀이 보낸
@@ -32,10 +38,12 @@ export default function MatchPartyDetail() {
   );
 
   useEffect(() => {
-    // ID로 팀 정보 찾기 (게시판에서 내려간 팀도 있으니 내 팀 목록까지 본다)
+    // ID로 팀 정보 찾기 (게시판에서 내려간 팀도 있으니 내 팀 목록과
+    // 매칭 보관함까지 본다. 수락 직후에도 화면이 비지 않게 하려는 목적)
     const target =
       posts.find((p) => p.id.toString() === id) ??
-      myTeams.find((t) => t.id.toString() === id);
+      myTeams.find((t) => t.id.toString() === id) ??
+      matchedTeams.find((t) => t.id.toString() === id);
     if (target) {
       setTeam(target);
     } else {
@@ -56,7 +64,7 @@ export default function MatchPartyDetail() {
         members: [],
       });
     }
-  }, [id, posts, myTeams]);
+  }, [id, posts, myTeams, matchedTeams]);
 
   if (!team) return null;
 
