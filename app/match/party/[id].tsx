@@ -1,7 +1,7 @@
 // 파일: app/match/party/[id].tsx
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Image,
@@ -17,12 +17,25 @@ import { useStore, Team } from "../../../store/useStore";
 export default function MatchPartyDetail() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
-  const { posts } = useStore(); // 실제로는 '요청 온 팀 목록'에서 찾아야 하지만, 지금은 전체 팀에서 찾음
+  const { posts, myTeams, receivedRequests, acceptMatch, rejectMatchRequest } =
+    useStore(); // 실제로는 '요청 온 팀 목록'에서 찾아야 하지만, 지금은 전체 팀에서 찾음
   const [team, setTeam] = useState<Team | null>(null);
 
+  // 이 화면은 상대 팀만 알고 들어온다. 우리 팀 id는 이 팀이 보낸
+  // 신청서의 receiverTeamId에서 가져와야 매칭이 올바른 두 팀으로 묶인다.
+  const request = useMemo(
+    () =>
+      receivedRequests.find(
+        (r) => r.senderTeamId.toString() === id && r.status === "WAITING",
+      ),
+    [receivedRequests, id],
+  );
+
   useEffect(() => {
-    // ID로 팀 정보 찾기
-    const target = posts.find((p) => p.id.toString() === id);
+    // ID로 팀 정보 찾기 (게시판에서 내려간 팀도 있으니 내 팀 목록까지 본다)
+    const target =
+      posts.find((p) => p.id.toString() === id) ??
+      myTeams.find((t) => t.id.toString() === id);
     if (target) {
       setTeam(target);
     } else {
@@ -43,7 +56,7 @@ export default function MatchPartyDetail() {
         members: [],
       });
     }
-  }, [id, posts]);
+  }, [id, posts, myTeams]);
 
   if (!team) return null;
 
@@ -51,16 +64,30 @@ export default function MatchPartyDetail() {
   const themeColor = isMale ? "#3288FF" : "#FF6B6B";
   const bgBadgeColor = isMale ? "#E8F3FF" : "#FFF0F0";
 
+  // 신청서가 있으면 그 신청을 받은 팀이 우리 팀. 없으면 내 첫 팀으로 떨어진다.
+  const myTeamId = request?.receiverTeamId ?? myTeams[0]?.id;
+
   // 수락 핸들러
   const handleAccept = () => {
+    if (!myTeamId) {
+      Alert.alert(
+        "먼저 팀이 필요해요",
+        "내 팀을 만들거나 참여한 뒤에 매칭을 수락할 수 있어요.",
+      );
+      return;
+    }
+
+    // 매칭을 먼저 만들고(신청서도 ACCEPTED로 바뀐다), 그 매칭 ID로 방에 들어간다.
+    const matchId = acceptMatch(myTeamId, team.id);
+
     Alert.alert(
       "매칭 수락 💖",
       "채팅방이 생성되었습니다! 대화를 시작해보세요.",
       [
         {
           text: "채팅방으로 이동",
-          // 채팅방 ID는 팀 ID를 따라간다고 가정
-          onPress: () => router.replace(`/chat/${team.id}` as any),
+          // 채팅방 ID는 항상 매치 ID를 따른다
+          onPress: () => router.replace(`/chat/${matchId}` as any),
         },
       ],
     );
@@ -74,7 +101,7 @@ export default function MatchPartyDetail() {
         text: "거절하기",
         style: "destructive",
         onPress: () => {
-          // TODO: store에서 요청 삭제 로직 호출
+          if (request) rejectMatchRequest(request.id);
           router.back();
         },
       },
