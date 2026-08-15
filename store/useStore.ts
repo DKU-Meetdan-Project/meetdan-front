@@ -20,12 +20,24 @@ export interface Team {
 }
 
 // 2. 매칭 정보 인터페이스
+/** 양 팀이 합의한 만남 약속. 채팅방에서 직접 입력받는다(자동 감지 아님). */
+export interface ConfirmedPlan {
+  /** "YYYY-MM-DD" */
+  date: string;
+  /** "HH:mm" (24시간) */
+  time: string;
+  /** 자유 텍스트. 예: "죽전역 근처" */
+  place: string;
+}
+
 export interface Match {
   id: string;
   myTeamId: number;
   partnerTeamId: number;
   partnerTeamName: string;
   startedAt: string;
+  /** 선택 사항. 없어도 채팅·매칭은 그대로 굴러간다. */
+  confirmedPlan?: ConfirmedPlan;
 }
 
 // 3. 신청서 데이터 (보낸 것, 받은 것 공통 사용)
@@ -37,12 +49,41 @@ export interface RequestData {
   timestamp: string;
 }
 
+// 4. 신고 / 차단
+export type ReportReason = "ABUSE" | "SEXUAL" | "SPAM" | "FRAUD" | "NO_SHOW" | "ETC";
+
+/** 신고 대상. 사람 한 명일 수도 있고, 채팅방 전체일 수도 있다. */
+export type ReportTargetType = "USER" | "ROOM";
+
+export interface Report {
+  id: string;
+  targetType: ReportTargetType;
+  targetId: string;
+  targetName: string;
+  reason: ReportReason;
+  detail: string;
+  /** 어느 채팅방에서 신고했는지 (운영자가 대화를 열어볼 수 있게) */
+  roomId?: string;
+  createdAt: string;
+}
+
+export interface BlockedUser {
+  id: string;
+  name: string;
+  dept?: string;
+  /** 어느 방에서 차단했는지 (차단 목록에서 맥락을 보여주려고) */
+  roomId?: string;
+  blockedAt: string;
+}
+
 interface AppState {
   posts: Team[];
   myTeams: Team[];
   sentRequests: RequestData[]; // ✅ [수정] 타입 통일
   receivedRequests: RequestData[];
   matches: Match[];
+  reports: Report[];
+  blockedUsers: BlockedUser[];
 
   setPosts: (posts: Team[]) => void;
   addPost: (post: Team) => void;
@@ -54,8 +95,45 @@ interface AppState {
   updateTeam: (id: number, updates: Partial<Team>) => void;
 
   sendMatchRequest: (myTeamId: number, targetTeamId: number) => boolean;
+  /** 신청 수락. 매칭을 만들고, 두 팀 사이의 대기중 신청을 ACCEPTED로 바꾼다. */
   acceptMatch: (myTeamId: number, partnerTeamId: number) => string;
+  /** 신청 거절. 받은 신청 하나를 REJECTED로 바꾼다. */
+  rejectMatchRequest: (requestId: number) => void;
+
+  /**
+   * 약속 확정/수정. 채팅방 id로 매칭 기록을 못 찾으면(예전 경로로 들어온 방)
+   * fallbackName으로 최소한의 기록을 만들어 둔다. 그래야 활동 탭에서도 보인다.
+   */
+  setConfirmedPlan: (
+    matchId: string,
+    plan: ConfirmedPlan,
+    fallbackName?: string,
+  ) => void;
+  clearConfirmedPlan: (matchId: string) => void;
+
+  /** 신고 접수. 같은 대상을 중복 신고하면 false를 돌려준다. */
+  submitReport: (report: Omit<Report, "id" | "createdAt">) => boolean;
+  blockUser: (user: Omit<BlockedUser, "blockedAt">) => void;
+  unblockUser: (userId: string) => void;
+  isBlocked: (userId: string) => boolean;
 }
+
+const formatDate = (d = new Date()) =>
+  `${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()}.`;
+
+/**
+ * 채팅방 id = 매칭 id. 어느 쪽이 수락하든 같은 방이 나와야 하므로
+ * 두 팀 id를 정렬해서 만든다.
+ */
+export const buildMatchId = (teamA: number, teamB: number) => {
+  const [lo, hi] = [teamA, teamB].sort((a, b) => a - b);
+  return `match_${lo}_${hi}`;
+};
+
+/** 신청서가 이 두 팀 사이의 것인가 (보낸/받은 방향 무관) */
+const isBetween = (req: RequestData, teamA: number, teamB: number) =>
+  (req.senderTeamId === teamA && req.receiverTeamId === teamB) ||
+  (req.senderTeamId === teamB && req.receiverTeamId === teamA);
 
 export const useStore = create<AppState>((set, get) => ({
   // 1. 초기 데이터
@@ -148,6 +226,8 @@ export const useStore = create<AppState>((set, get) => ({
   ],
 
   matches: [],
+  reports: [],
+  blockedUsers: [],
 
   // ... (기존 액션들 동일) ...
   setPosts: (newPosts) => set({ posts: newPosts }),
@@ -245,8 +325,7 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   acceptMatch: (myTeamId, partnerTeamId) => {
-    const sortedIds = [myTeamId, partnerTeamId].sort((a, b) => a - b);
-    const matchId = `match_${sortedIds[0]}_${sortedIds[1]}`;
+    const matchId = buildMatchId(myTeamId, partnerTeamId);
     const state = get();
     const partner =
       state.posts.find((p) => p.id === partnerTeamId) ||
@@ -256,12 +335,114 @@ export const useStore = create<AppState>((set, get) => ({
       myTeamId,
       partnerTeamId,
       partnerTeamName: partner ? partner.title : "알 수 없는 팀",
-      startedAt: new Date().toLocaleDateString(),
+      startedAt: formatDate(),
     };
-    const exists = state.matches.find((m) => m.id === matchId);
-    if (!exists) {
-      set((state) => ({ matches: [newMatch, ...state.matches] }));
-    }
+
+    // 이 매칭을 만들어낸 신청서를 ACCEPTED로 넘긴다. 방향(받은/보낸)은
+    // 모르니 두 목록 모두에서 이 두 팀 사이의 대기중 신청을 찾는다.
+    const accept = (list: RequestData[]) =>
+      list.map((r) =>
+        r.status === "WAITING" && isBetween(r, myTeamId, partnerTeamId)
+          ? { ...r, status: "ACCEPTED" as const }
+          : r,
+      );
+
+    set((state) => ({
+      // 이미 있는 매칭이면 중복 생성하지 않는다
+      matches: state.matches.some((m) => m.id === matchId)
+        ? state.matches
+        : [newMatch, ...state.matches],
+      receivedRequests: accept(state.receivedRequests),
+      sentRequests: accept(state.sentRequests),
+    }));
+
     return matchId;
   },
+
+  rejectMatchRequest: (requestId) =>
+    set((state) => ({
+      receivedRequests: state.receivedRequests.map((r) =>
+        r.id === requestId ? { ...r, status: "REJECTED" as const } : r,
+      ),
+    })),
+
+  setConfirmedPlan: (matchId, plan, fallbackName) =>
+    set((state) => {
+      const exists = state.matches.some((m) => m.id === matchId);
+      if (exists) {
+        return {
+          matches: state.matches.map((m) =>
+            m.id === matchId ? { ...m, confirmedPlan: plan } : m,
+          ),
+        };
+      }
+      const placeholder: Match = {
+        id: matchId,
+        myTeamId: 0,
+        partnerTeamId: 0,
+        partnerTeamName: fallbackName ?? "매칭된 팀",
+        startedAt: formatDate(),
+        confirmedPlan: plan,
+      };
+      return { matches: [placeholder, ...state.matches] };
+    }),
+
+  clearConfirmedPlan: (matchId) =>
+    set((state) => ({
+      matches: state.matches.map((m) =>
+        m.id === matchId ? { ...m, confirmedPlan: undefined } : m,
+      ),
+    })),
+
+  // ── 신고 / 차단 ────────────────────────────────────────
+  submitReport: (report) => {
+    // 같은 방에서 같은 대상을 또 신고하는 건 막는다. (운영 쪽 중복 접수 방지)
+    const already = get().reports.some(
+      (r) =>
+        r.targetType === report.targetType &&
+        r.targetId === report.targetId &&
+        r.roomId === report.roomId,
+    );
+    if (already) return false;
+
+    const newReport: Report = {
+      ...report,
+      id: `report_${Date.now()}`,
+      createdAt: formatDate(),
+    };
+    set((state) => ({ reports: [newReport, ...state.reports] }));
+    return true;
+  },
+
+  blockUser: (user) =>
+    set((state) => {
+      if (state.blockedUsers.some((b) => b.id === user.id)) return state;
+      return {
+        blockedUsers: [
+          { ...user, blockedAt: formatDate() },
+          ...state.blockedUsers,
+        ],
+      };
+    }),
+
+  unblockUser: (userId) =>
+    set((state) => ({
+      blockedUsers: state.blockedUsers.filter((b) => b.id !== userId),
+    })),
+
+  isBlocked: (userId) => get().blockedUsers.some((b) => b.id === userId),
 }));
+
+/** 신고 사유 라벨. 시트와 차단 목록이 같은 문구를 쓰도록 한곳에 둔다. */
+export const REPORT_REASONS: {
+  value: ReportReason;
+  label: string;
+  desc: string;
+}[] = [
+  { value: "ABUSE", label: "욕설·비방", desc: "모욕적인 언행이나 혐오 표현" },
+  { value: "SEXUAL", label: "성희롱·불쾌한 대화", desc: "성적인 농담이나 요구" },
+  { value: "SPAM", label: "광고·홍보", desc: "외부 링크나 상업적 목적의 대화" },
+  { value: "FRAUD", label: "사칭·사기", desc: "타인 사칭, 금전 요구" },
+  { value: "NO_SHOW", label: "약속 불이행", desc: "노쇼하거나 연락이 끊김" },
+  { value: "ETC", label: "기타", desc: "위에 없는 다른 문제" },
+];

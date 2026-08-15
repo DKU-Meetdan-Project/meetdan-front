@@ -1,8 +1,9 @@
+import { Ionicons } from "@expo/vector-icons";
 import React from "react";
-import { StyleSheet, Text, View, ViewProps } from "react-native";
+import { Pressable, StyleSheet, Text, View, ViewProps } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { Colors, Hairline, Spacing, Typo } from "@/constants/theme";
+import { Colors, Hairline, Palette, Spacing, Typo } from "@/constants/theme";
 
 /**
  * 화면 컨테이너. 상단 노치 여백을 직접 계산해서 넣어준다.
@@ -48,6 +49,52 @@ export function ScreenHeader({
   );
 }
 
+interface NavHeaderProps {
+  title: string;
+  /** 제목 아래 작은 보조 정보 (참여 인원 등) */
+  subtitle?: string;
+  onBack: () => void;
+  right?: React.ReactNode;
+  bordered?: boolean;
+}
+
+/**
+ * 뒤로가기가 있는 상세 화면용 헤더.
+ * 제목을 가운데 두되, 좌우 버튼 폭을 같게 잡아 제목이 흔들리지 않게 한다.
+ */
+export function NavHeader({
+  title,
+  subtitle,
+  onBack,
+  right,
+  bordered = true,
+}: NavHeaderProps) {
+  return (
+    <View style={[styles.nav, bordered && styles.headerBordered]}>
+      <Pressable
+        onPress={onBack}
+        hitSlop={8}
+        style={({ pressed }) => [styles.navButton, pressed && { opacity: 0.5 }]}
+      >
+        <Ionicons name="chevron-back" size={26} color={Palette.gray800} />
+      </Pressable>
+
+      <View style={styles.navCenter}>
+        <Text style={styles.navTitle} numberOfLines={1}>
+          {title}
+        </Text>
+        {!!subtitle && (
+          <Text style={styles.navSubtitle} numberOfLines={1}>
+            {subtitle}
+          </Text>
+        )}
+      </View>
+
+      <View style={styles.navRight}>{right}</View>
+    </View>
+  );
+}
+
 /** 섹션 사이를 나누는 두꺼운 회색 띠 (마이페이지 등 그룹 구분용) */
 export function SectionGap() {
   return <View style={styles.sectionGap} />;
@@ -86,6 +133,35 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.xs,
+  },
+  nav: {
+    flexDirection: "row",
+    alignItems: "center",
+    height: 52,
+    paddingHorizontal: Spacing.sm,
+    backgroundColor: Colors.light.background,
+  },
+  navButton: {
+    width: 40,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  navCenter: { flex: 1, alignItems: "center" },
+  navTitle: {
+    ...Typo.subtitle,
+    fontSize: 16,
+  },
+  navSubtitle: {
+    ...Typo.caption,
+    fontSize: 12,
+    marginTop: 1,
+  },
+  navRight: {
+    minWidth: 40,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
   },
   sectionGap: {
     height: Spacing.sm,

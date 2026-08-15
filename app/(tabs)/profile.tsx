@@ -66,9 +66,12 @@ const BIO_MAX = 40;
 const MENU_ITEMS: {
   icon: React.ComponentProps<typeof Ionicons>["name"];
   label: string;
+  /** 눌렀을 때 이동할 화면. 없으면 아직 준비 중인 메뉴 */
+  route?: string;
 }[] = [
   { icon: "notifications-outline", label: "알림 설정" },
   { icon: "shield-checkmark-outline", label: "학생증 재인증" },
+  { icon: "ban-outline", label: "차단 목록", route: "/settings/blocked" },
   { icon: "document-text-outline", label: "이용약관" },
 ];
 
@@ -355,6 +358,11 @@ export default function ProfileTab() {
             <View key={item.label}>
               {index > 0 && <Divider inset={Spacing.screen + 34} />}
               <Pressable
+                onPress={() =>
+                  item.route
+                    ? router.push(item.route as any)
+                    : Alert.alert("준비 중이에요", "곧 만나볼 수 있어요.")
+                }
                 style={({ pressed }) => [
                   styles.menuRow,
                   pressed && { backgroundColor: Palette.gray50 },
