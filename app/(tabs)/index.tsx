@@ -14,15 +14,22 @@ import {
 } from "react-native";
 
 import { API } from "@/api/client";
+import type { BalanceChoice, BalanceGame } from "@/api/client";
+import { DailySection } from "@/components/home/daily-section";
 import { FeedRow } from "@/components/home/feed-row";
-import { FortuneRow } from "@/components/home/fortune-row";
-import { ProfileProgressRow } from "@/components/home/profile-progress-row";
+import { ProfileBanner } from "@/components/home/profile-banner";
 import MeetDanLogo from "@/components/Logo";
 import { Badge } from "@/components/ui/badge";
-import { Chip, TagPill } from "@/components/ui/chip";
+import { Chip } from "@/components/ui/chip";
 import { EmptyHint, EmptyState } from "@/components/ui/empty-state";
 import { PressScale } from "@/components/ui/press-scale";
-import { Divider, Screen, ScreenHeader } from "@/components/ui/screen";
+import {
+  Divider,
+  Screen,
+  ScreenHeader,
+  SectionGap,
+  SectionHeader,
+} from "@/components/ui/screen";
 import {
   GenderColor,
   Palette,
@@ -39,21 +46,13 @@ type CampusFilter = "전체" | "죽전" | "천안";
 const CAMPUS_FILTERS: CampusFilter[] = ["전체", "죽전", "천안"];
 
 /**
- * 홈에 놓이는 줄의 종류.
+ * 팀 글이 이보다 많으면 "오늘의 질문"을 한 줄로 접어둔다.
  *
- * 서비스 초기에는 공개된 팀이 몇 개 없어서 홈이 거의 빈 채로 열린다.
- * 팀 글만 그리면 "아직 아무것도 없다"는 사실만 크게 보이므로, 매일 바뀌는
- * 운세와 프로필 안내를 같은 목록 안에 섞는다. 별도 영역(헤더 배너 등)이
- * 아니라 목록의 한 줄로 넣는 이유는, 팀 글이 늘어나면 자연스럽게 아래로
- * 밀려나 결국 팀 글이 화면을 차지하게 하기 위해서다.
+ * 운세와 밸런스 게임은 게시글 부족을 메우려고 넣은 것이다. 목록이 자기
+ * 힘으로 화면을 채우기 시작하면 위쪽 자리를 내줘야 한다. 접힌 줄을 누르면
+ * 언제든 다시 펼 수 있다.
  */
-type FeedItem =
-  | { key: string; kind: "team"; team: Team }
-  | { key: string; kind: "fortune" }
-  | { key: string; kind: "profile" };
-
-/** 운세를 몇 번째 팀 글 뒤에 끼울지. 팀 글이 이보다 적으면 그 뒤에 바로 붙는다. */
-const FORTUNE_SLOT = 3;
+const COLLAPSE_AFTER = 8;
 
 /** 하루가 바뀌었는지만 보면 되므로 시:분은 버린다. */
 const dayKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
@@ -73,6 +72,14 @@ export default function HomeTab() {
   // 탭에 들어올 때마다 날이 바뀌었는지 확인한다. 같은 날이면 이전 Date를
   // 그대로 두어(=참조가 안 바뀌어) 운세를 다시 계산하지 않는다.
   const [today, setToday] = useState(() => new Date());
+
+  /**
+   * 오늘의 밸런스 게임. 질문도 집계도 서버가 준다.
+   *
+   * 마이그레이션 016 을 아직 안 돌렸으면 null 로 남고 그 줄은 그리지 않는다.
+   * 게시판이 그것 때문에 막히면 안 된다.
+   */
+  const [balance, setBalance] = useState<BalanceGame | null>(null);
 
   // 기본값은 내 캠퍼스. 아직 내 정보가 안 왔으면 전체로 두고 도착하면 한 번만 맞춘다.
   const [campus, setCampus] = useState<CampusFilter>(
@@ -94,14 +101,19 @@ export default function HomeTab() {
     // 안 읽은 알림 개수도 같이 물어본다. 평소에는 Realtime 구독(_layout.tsx)이
     // 뱃지를 실시간으로 올리지만, 앱이 백그라운드에 있는 동안 구독이 끊겼다
     // 붙으면 그 사이 도착한 알림을 놓친다. 홈에 돌아올 때마다 한 번씩 맞춘다.
-    const [result, unread] = await Promise.all([
+    const [result, unread, game] = await Promise.all([
       API.getPosts(),
       API.getUnreadNotificationCount(),
+      API.getBalanceGame(),
     ]);
 
     if (unread.code === 200 && unread.data !== undefined) {
       setUnreadCount(unread.data);
     }
+
+    // 밸런스 게임은 실패해도 조용히 넘어간다. 읽을거리 한 줄 때문에
+    // 게시판 전체가 오류창에 막히면 안 된다.
+    setBalance(game.code === 200 && game.data ? game.data : null);
 
     if (result.code !== 200 || !result.data) {
       // 401(세션 만료)은 _layout.tsx 가 로그인 화면으로 보내므로 조용히 둔다.
@@ -163,49 +175,42 @@ export default function HomeTab() {
     [currentUser],
   );
 
+  // 팀 글이 충분히 쌓이면 "오늘의 질문"은 접어둘 수 있다. 접힌 걸 편 상태는
+  // 이 화면을 떠날 때까지만 기억한다 — 매번 켤 때마다 목록이 주인공이어야 한다.
+  const [dailyExpanded, setDailyExpanded] = useState(false);
+  const dailyCollapsible = visible.length > COLLAPSE_AFTER;
+
   /**
-   * 팀 글 사이에 운세·프로필 안내를 끼운 최종 목록.
-   *
-   * 프로필 안내가 맨 위인 건 "지금 당장 할 수 있는 일"이기 때문이고,
-   * 운세는 팀 글 세 개 뒤로 넣는다. 팀 글이 쌓이기 시작하면 읽을거리가
-   * 목록 위쪽을 차지하지 않아야 한다.
+   * 투표. 서버 왕복을 기다렸다 그리면 누른 느낌이 죽으므로 먼저 반영하고
+   * 서버가 준 집계로 맞춘다. 실패하면 누르기 전으로 되돌린다.
    */
-  const feed = useMemo<FeedItem[]>(() => {
-    const teams: FeedItem[] = visible.map((team) => ({
-      key: `team:${team.id}`,
-      kind: "team",
-      team,
-    }));
+  const handleVote = useCallback(
+    async (choice: BalanceChoice) => {
+      const before = balance;
+      if (!before || before.myChoice) return;
 
-    const items: FeedItem[] = [];
-    if (progress && !progress.isComplete) {
-      items.push({ key: "profile", kind: "profile" });
-    }
-    items.push(...teams.slice(0, FORTUNE_SLOT));
-    if (fortune) {
-      items.push({ key: "fortune", kind: "fortune" });
-    }
-    items.push(...teams.slice(FORTUNE_SLOT));
-    return items;
-  }, [visible, progress, fortune]);
+      setBalance({
+        ...before,
+        myChoice: choice,
+        votesA: before.votesA + (choice === "A" ? 1 : 0),
+        votesB: before.votesB + (choice === "B" ? 1 : 0),
+      });
 
-  const renderItem = ({ item }: { item: FeedItem }) => {
-    if (item.kind === "fortune") {
-      return fortune ? <FortuneRow fortune={fortune} /> : null;
-    }
+      const result = await API.voteBalanceGame(before.questionId, choice);
+      if (result.code === 200 && result.data) {
+        setBalance(result.data);
+        return;
+      }
 
-    if (item.kind === "profile") {
-      return progress ? (
-        <ProfileProgressRow
-          progress={progress}
-          // 탭 이동이라 push가 아니라 navigate. 홈 위에 마이 탭이 쌓이면
-          // 뒤로가기 동작이 탭바와 어긋난다.
-          onPress={() => router.navigate("/(tabs)/profile" as any)}
-        />
-      ) : null;
-    }
+      setBalance(before);
+      if (result.code !== 401) {
+        Alert.alert("오류", result.message ?? "투표하지 못했어요.");
+      }
+    },
+    [balance],
+  );
 
-    const team = item.team;
+  const renderItem = ({ item: team }: { item: Team }) => {
     const gender = GenderColor[team.gender];
     const full = team.currentCount >= team.count;
 
@@ -228,14 +233,17 @@ export default function HomeTab() {
         excerpt={team.content?.trim() || undefined}
         onPress={() => router.push(`/post/${team.id}` as any)}
       >
+        {/*
+          뱃지는 하나만 남긴다. 예전에는 여기에 자리 수 뱃지와 태그 알약
+          두 개가 함께 붙었는데, 알약이 세 개씩 달린 줄이 화면을 채우면
+          정작 중요한 "들어갈 자리가 있나"가 묻힌다.
+          태그는 상세 화면에서 본다 — 목록에서 팀을 고르는 기준이 아니다.
+        */}
         {full ? (
           <Badge label="모집 완료" tone="success" />
         ) : (
           <Badge label={`${team.count - team.currentCount}자리 남음`} />
         )}
-        {team.tags?.slice(0, 2).map((tag) => (
-          <TagPill key={tag} label={tag} />
-        ))}
       </FeedRow>
     );
   };
@@ -274,9 +282,9 @@ export default function HomeTab() {
         </View>
       ) : (
         <FlatList
-          data={feed}
+          data={visible}
           renderItem={renderItem}
-          keyExtractor={(item) => item.key}
+          keyExtractor={(item) => item.id.toString()}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.listContent}
           refreshControl={
@@ -289,6 +297,36 @@ export default function HomeTab() {
           ItemSeparatorComponent={() => <Divider inset={Spacing.screen} />}
           ListHeaderComponent={
             <View>
+              {/* 할 일 한 줄. 읽을거리(오늘의 질문)와 같은 상자에 담지 않는다 —
+                  "뭘 볼까"와 "뭘 해야 하지"가 섞이면 화면이 더 산만해진다. */}
+              {!!progress && !progress.isComplete && (
+                <ProfileBanner
+                  progress={progress}
+                  // 탭 이동이라 push가 아니라 navigate. 홈 위에 마이 탭이 쌓이면
+                  // 뒤로가기 동작이 탭바와 어긋난다.
+                  onPress={() => router.navigate("/(tabs)/profile" as any)}
+                />
+              )}
+
+              <DailySection
+                fortune={fortune}
+                balance={balance}
+                onVote={handleVote}
+                collapsible={dailyCollapsible}
+                expanded={!dailyCollapsible || dailyExpanded}
+                onToggle={() => setDailyExpanded((prev) => !prev)}
+              />
+
+              {/* 회색 띠 한 줄이 "여기서부터는 진짜 팀 글"이라고 말한다.
+                  이게 없으면 위의 읽을거리들이 게시글인 척 섞여 보인다. */}
+              <SectionGap />
+
+              {/* 0은 굳이 적지 않는다. 아래 빈 화면 안내가 이미 그 말을 한다. */}
+              <SectionHeader
+                title="지금 열린 팀"
+                count={visible.length > 0 ? visible.length : undefined}
+              />
+
               {/* 필터는 스크롤을 따라 올라간다. 목록이 주인공이라 위쪽을
                   고정 요소로 채우지 않는다. */}
               <View style={styles.filterRow}>
@@ -304,34 +342,27 @@ export default function HomeTab() {
               <Divider />
             </View>
           }
-          // 운세·프로필 줄이 있어서 목록 자체는 비지 않는다. 그래서
-          // ListEmptyComponent 대신 "팀 글이 없을 때"를 직접 따져 맨 아래에 붙인다.
-          ListFooterComponent={
-            visible.length === 0 ? (
-              <View>
-                <Divider />
-                <EmptyState
-                  icon="sparkles-outline"
-                  title="아직 열린 과팅이 없어요"
-                  description={
-                    campus === "전체"
-                      ? "첫 번째 팀을 만들어 상대를 기다려보세요."
-                      : `${campus} 캠퍼스에 올라온 팀이 없어요.`
-                  }
-                  actionLabel="팀 만들기"
-                  onAction={() => router.push("/write")}
-                >
-                  <EmptyHint
-                    icon="people-outline"
-                    text="팀은 2~4명까지 모을 수 있어요"
-                  />
-                  <EmptyHint
-                    icon="ticket-outline"
-                    text="초대 코드로 친구를 부를 수 있어요"
-                  />
-                </EmptyState>
-              </View>
-            ) : null
+          ListEmptyComponent={
+            <EmptyState
+              icon="sparkles-outline"
+              title="아직 열린 과팅이 없어요"
+              description={
+                campus === "전체"
+                  ? "첫 번째 팀을 만들어 상대를 기다려보세요."
+                  : `${campus} 캠퍼스에 올라온 팀이 없어요.`
+              }
+              actionLabel="팀 만들기"
+              onAction={() => router.push("/write")}
+            >
+              <EmptyHint
+                icon="people-outline"
+                text="팀은 2~4명까지 모을 수 있어요"
+              />
+              <EmptyHint
+                icon="ticket-outline"
+                text="초대 코드로 친구를 부를 수 있어요"
+              />
+            </EmptyState>
           }
         />
       )}
