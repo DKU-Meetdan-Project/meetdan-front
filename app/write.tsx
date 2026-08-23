@@ -15,6 +15,8 @@ import {
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 
 import { API } from "@/api/client";
+import { Screen } from "@/components/ui/screen";
+import { Palette, Radius, Spacing, Typo } from "@/constants/theme";
 import { useStore } from "../store/useStore";
 
 // post/[id].tsx 상세 화면이 태그를 그대로 보여주므로, 여기서 적은 값이 곧 표시될 내용이다.
@@ -139,15 +141,15 @@ export default function Write() {
   };
 
   return (
-    <View style={styles.container}>
+    <Screen>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity onPress={() => router.back()} hitSlop={8}>
           <Text style={styles.cancelText}>취소</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>팀 만들기</Text>
-        <TouchableOpacity onPress={handleSubmit} disabled={isSubmitting}>
+        <TouchableOpacity onPress={handleSubmit} disabled={isSubmitting} hitSlop={8}>
           {isSubmitting ? (
-            <ActivityIndicator color="#3288FF" />
+            <ActivityIndicator color={Palette.brand} />
           ) : (
             <Text style={styles.submitText}>완료</Text>
           )}
@@ -156,7 +158,7 @@ export default function Write() {
 
       <KeyboardAwareScrollView
         style={styles.flex}
-        contentContainerStyle={[styles.formContainer, { paddingBottom: 100 }]}
+        contentContainerStyle={styles.formContainer}
         enableOnAndroid
         extraScrollHeight={Platform.OS === "ios" ? 20 : 40}
         enableAutomaticScroll
@@ -215,7 +217,7 @@ export default function Write() {
             어떻게 잡혀 있는지만 보여준다. */}
         <Text style={styles.label}>평균 나이</Text>
         <View style={styles.infoBox}>
-          <Ionicons name="calculator-outline" size={18} color="#3288FF" />
+          <Ionicons name="calculator-outline" size={18} color={Palette.brand} />
           <View style={styles.infoTextBox}>
             <Text style={styles.infoValue}>
               {currentUser?.age != null
@@ -234,7 +236,7 @@ export default function Write() {
         <TextInput
           style={styles.input}
           placeholder="소프트웨어학과 3명 술 진탕 마셔요"
-          placeholderTextColor="#999"
+          placeholderTextColor={Palette.gray400}
           value={title}
           onChangeText={setTitle}
         />
@@ -246,7 +248,7 @@ export default function Write() {
           <TextInput
             style={[styles.input, styles.tagInput]}
             placeholder="예: 술찌, 맛집탐방"
-            placeholderTextColor="#999"
+            placeholderTextColor={Palette.gray400}
             value={tagDraft}
             onChangeText={setTagDraft}
             onSubmitEditing={addTag}
@@ -285,7 +287,7 @@ export default function Write() {
                 onPress={() => removeTag(tag)}
               >
                 <Text style={styles.tagChipText}>{tag}</Text>
-                <Ionicons name="close" size={14} color="#3288FF" />
+                <Ionicons name="close" size={14} color={Palette.brand} />
               </TouchableOpacity>
             ))}
           </View>
@@ -295,109 +297,157 @@ export default function Write() {
         <TextInput
           style={[styles.input, styles.textArea]}
           placeholder="MBTI, 주량, 분위기 등 자유롭게 적어주세요."
-          placeholderTextColor="#999"
+          placeholderTextColor={Palette.gray400}
           multiline={true}
           value={content}
           onChangeText={setContent}
           textAlignVertical="top"
         />
       </KeyboardAwareScrollView>
-    </View>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
   flex: { flex: 1 },
+
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingTop: 60,
-    paddingBottom: 15,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
-    backgroundColor: "#fff",
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.screen,
   },
-  headerTitle: { fontSize: 18, fontWeight: "bold" },
-  cancelText: { fontSize: 16, color: "#666" },
-  submitText: { fontSize: 16, fontWeight: "bold", color: "#3288FF" },
-  formContainer: { padding: 20 },
+  headerTitle: { ...Typo.title, fontSize: 17 },
+  cancelText: {
+    fontSize: 15,
+    fontWeight: "600",
+    letterSpacing: -0.3,
+    color: Palette.gray600,
+  },
+  submitText: {
+    fontSize: 15,
+    fontWeight: "700",
+    letterSpacing: -0.3,
+    color: Palette.brand,
+  },
+
+  formContainer: {
+    paddingHorizontal: Spacing.screen,
+    paddingTop: Spacing.xs,
+    paddingBottom: 100,
+  },
+
   label: {
-    fontSize: 16,
-    fontWeight: "bold",
-    marginBottom: 10,
-    marginTop: 20,
-    color: "#333",
+    ...Typo.section,
+    marginBottom: Spacing.sm,
+    marginTop: Spacing.xl,
   },
+
+  // 흰 화면 위에서는 테두리보다 회색으로 채우는 편이 입력칸임을 더 잘 알린다.
   input: {
-    borderBottomWidth: 1,
-    borderBottomColor: "#ddd",
-    paddingVertical: 10,
-    fontSize: 16,
-    color: "#000",
+    backgroundColor: Palette.gray100,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: 14,
+    fontSize: 15,
+    fontWeight: "500",
+    letterSpacing: -0.3,
+    color: Palette.gray900,
   },
   textArea: {
-    height: 150,
+    height: 140,
+    paddingTop: 13,
     textAlignVertical: "top",
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 8,
-    padding: 10,
-    marginTop: 5,
-    borderBottomWidth: 1,
+    marginTop: 0,
   },
-  countContainer: { flexDirection: "row", gap: 10 },
+
+  countContainer: { flexDirection: "row", gap: Spacing.sm },
   countButton: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    backgroundColor: "#f5f5f5",
+    paddingVertical: 14,
+    borderRadius: Radius.md,
+    backgroundColor: Palette.gray100,
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: "transparent",
   },
-  countButtonActive: { backgroundColor: "#E8F3FF", borderColor: "#3288FF" },
-  countText: { fontSize: 16, color: "#888", fontWeight: "bold" },
-  countTextActive: { color: "#3288FF" },
-  hint: { marginTop: 8, color: "#888", fontSize: 12 },
+  // 고른 칸은 채운 파랑. 앱 전체에서 "고름"은 같은 방식으로 보인다.
+  countButtonActive: {
+    backgroundColor: Palette.brand,
+    borderColor: Palette.brand,
+  },
+  countText: {
+    fontSize: 15,
+    fontWeight: "700",
+    letterSpacing: -0.3,
+    color: Palette.gray600,
+  },
+  countTextActive: { color: Palette.white },
+
+  hint: {
+    ...Typo.caption,
+    marginTop: Spacing.sm,
+  },
 
   // 평균 나이 안내 — 입력칸이 아니라 '서버가 계산한다'는 표시다
   infoBox: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 10,
-    padding: 14,
-    borderRadius: 10,
-    backgroundColor: "#F4F8FF",
+    gap: Spacing.sm,
+    padding: Spacing.lg,
+    borderRadius: Radius.md,
+    backgroundColor: Palette.brandWeak,
   },
   infoTextBox: { flex: 1 },
-  infoValue: { fontSize: 15, fontWeight: "bold", color: "#333" },
-  infoHint: { marginTop: 4, fontSize: 12, color: "#888", lineHeight: 17 },
+  infoValue: {
+    fontSize: 14,
+    fontWeight: "700",
+    letterSpacing: -0.3,
+    color: Palette.brandText,
+  },
+  infoHint: {
+    marginTop: 3,
+    fontSize: 12,
+    fontWeight: "500",
+    letterSpacing: -0.2,
+    color: Palette.gray600,
+    lineHeight: 17,
+  },
 
-  tagInputRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  tagInputRow: { flexDirection: "row", alignItems: "center", gap: Spacing.sm },
   tagInput: { flex: 1 },
   tagAddButton: {
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 8,
-    backgroundColor: "#E8F3FF",
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: 13,
+    borderRadius: Radius.md,
+    backgroundColor: Palette.brand,
   },
-  tagAddButtonDisabled: { backgroundColor: "#f5f5f5" },
-  tagAddButtonText: { fontSize: 14, fontWeight: "bold", color: "#3288FF" },
+  tagAddButtonDisabled: { backgroundColor: Palette.gray200 },
+  tagAddButtonText: {
+    fontSize: 14,
+    fontWeight: "700",
+    letterSpacing: -0.3,
+    color: Palette.white,
+  },
 
-  tagGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 },
+  tagGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
+  },
   tagChip: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 20,
-    backgroundColor: "#E8F3FF",
-    borderWidth: 1,
-    borderColor: "#3288FF",
+    gap: 5,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 8,
+    borderRadius: Radius.full,
+    backgroundColor: Palette.brandWeak,
   },
-  tagChipText: { fontSize: 14, color: "#3288FF", fontWeight: "600" },
+  tagChipText: {
+    fontSize: 13,
+    fontWeight: "700",
+    letterSpacing: -0.3,
+    color: Palette.brandText,
+  },
 });
