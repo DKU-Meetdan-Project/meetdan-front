@@ -281,7 +281,7 @@ const styles = StyleSheet.create({
   dateMonth: {
     fontSize: 10,
     fontWeight: "600",
-    color: Palette.gray400,
+    color: Palette.gray500,
   },
   dateTextSelected: { color: Palette.white },
 

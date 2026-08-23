@@ -1,11 +1,10 @@
 // 파일 경로: app/(tabs)/profile.tsx
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Image,
   Modal,
   Platform,
   Pressable,
@@ -13,6 +12,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { Image } from "expo-image";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -34,24 +34,18 @@ import {
   Spacing,
   Typo,
 } from "@/constants/theme";
-import * as AuthService from "@/utils/auth";
-import type { Account, UserProfile } from "@/utils/auth";
+import { useStore } from "@/store/useStore";
+import { API } from "@/api/client";
+import type { ProfilePatch } from "@/api/client";
+import { profileImages } from "@/constants/avatars";
 
-// 💡 12개 프로필 이미지 에셋 불러오기
-const profileImages = [
-  require("../../assets/images/profile_avatars/1.png"),
-  require("../../assets/images/profile_avatars/2.png"),
-  require("../../assets/images/profile_avatars/3.png"),
-  require("../../assets/images/profile_avatars/4.png"),
-  require("../../assets/images/profile_avatars/5.png"),
-  require("../../assets/images/profile_avatars/6.png"),
-  require("../../assets/images/profile_avatars/7.png"),
-  require("../../assets/images/profile_avatars/8.png"),
-  require("../../assets/images/profile_avatars/9.png"),
-  require("../../assets/images/profile_avatars/10.png"),
-  require("../../assets/images/profile_avatars/11.png"),
-  require("../../assets/images/profile_avatars/12.png"),
-];
+/** 편집 폼이 비어 있을 때의 기본값 */
+const EMPTY_PROFILE: ProfilePatch = {
+  nickname: "",
+  bio: "",
+  mbti: "",
+  avatarIdx: 0,
+};
 
 const MBTI_TYPES = [
   "ISTJ", "ISFJ", "INFJ", "INTJ",
@@ -69,7 +63,11 @@ const MENU_ITEMS: {
   /** 눌렀을 때 이동할 화면. 없으면 아직 준비 중인 메뉴 */
   route?: string;
 }[] = [
-  { icon: "notifications-outline", label: "알림 설정" },
+  {
+    icon: "notifications-outline",
+    label: "알림 설정",
+    route: "/settings/notifications",
+  },
   { icon: "shield-checkmark-outline", label: "학생증 재인증" },
   { icon: "ban-outline", label: "차단 목록", route: "/settings/blocked" },
   { icon: "document-text-outline", label: "이용약관" },
@@ -79,31 +77,30 @@ export default function ProfileTab() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  // 회원가입 때 확정된 정보 (읽기 전용)
-  const [account, setAccount] = useState<Account | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  // 로그인한 내 정보 (전역). Supabase profiles 한 줄이 그대로 들어있다.
+  const currentUser = useStore((state) => state.currentUser);
+  const setCurrentUser = useStore((state) => state.setCurrentUser);
 
-  // 사용자가 바꿀 수 있는 정보
-  const [profile, setProfile] = useState<UserProfile>(AuthService.DEFAULT_PROFILE);
   // 편집 중인 임시 값. 취소하면 그냥 버린다.
-  const [draft, setDraft] = useState<UserProfile>(AuthService.DEFAULT_PROFILE);
+  const [draft, setDraft] = useState<ProfilePatch>(EMPTY_PROFILE);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   const [isModalVisible, setModalVisible] = useState(false);
   const [tempSelectedIdx, setTempSelectedIdx] = useState(0);
 
-  useEffect(() => {
-    (async () => {
-      const [savedAccount, savedProfile] = await Promise.all([
-        AuthService.getAccount(),
-        AuthService.getProfile(),
-      ]);
-      setAccount(savedAccount);
-      setProfile(savedProfile);
-      setIsLoading(false);
-    })();
-  }, []);
+  // _layout.tsx 가 세션 복원 직후 채워준다. 그 전 아주 잠깐만 비어 있다.
+  const isLoading = currentUser == null;
+
+  // 저장된 값만 뽑아낸 편집용 조각
+  const profile: ProfilePatch = currentUser
+    ? {
+        nickname: currentUser.nickname,
+        bio: currentUser.bio,
+        mbti: currentUser.mbti,
+        avatarIdx: currentUser.avatarIdx,
+      }
+    : EMPTY_PROFILE;
 
   const startEditing = () => {
     setDraft(profile); // 현재 저장된 값에서 시작
@@ -124,11 +121,15 @@ export default function ProfileTab() {
       return;
     }
 
-    const next: UserProfile = { ...draft, nickname, bio };
     try {
       setIsSaving(true);
-      await AuthService.saveProfile(next);
-      setProfile(next);
+      const result = await API.updateMyProfile({ ...draft, nickname, bio });
+      if (result.code !== 200 || !result.data) {
+        Alert.alert("오류", result.message ?? "프로필 저장에 실패했어요.");
+        return;
+      }
+      // 서버가 돌려준 값으로 전역 상태를 갱신한다 (displayName 도 여기서 다시 계산됨)
+      setCurrentUser(result.data);
       setIsEditing(false);
     } catch (e) {
       Alert.alert("오류", "프로필 저장 중 문제가 발생했습니다.");
@@ -153,24 +154,41 @@ export default function ProfileTab() {
       {
         text: "로그아웃",
         style: "destructive",
-        onPress: () => router.replace("/login"),
+        onPress: async () => {
+          // 세션을 지우면 _layout.tsx 의 onAuthStateChange 가
+          // 전역 유저 정보를 비우고 로그인 화면으로 보낸다.
+          await API.logout();
+          router.replace("/login");
+        },
       },
     ]);
   };
 
   // 편집 중에는 미리보기가 바로 보이도록 draft 값을 쓴다
   const shown = isEditing ? draft : profile;
-  const displayName = shown.nickname.trim() || account?.name || "밋단 회원";
+
+  /** 화면에 뿌릴 내 정보. 전부 서버 profiles 에서 온다. */
+  const info = {
+    name: currentUser?.name ?? null,
+    gender: currentUser?.gender ?? null,
+    campus: currentUser?.campus ?? null,
+    dept: currentUser?.dept ?? null,
+    email: currentUser?.email ?? null,
+    userId: currentUser?.loginId ?? null,
+  };
+  const hasInfo = !!(info.name || info.dept || info.campus);
+
+  const displayName = shown.nickname.trim() || info.name || "밋단 회원";
   // 저장된 인덱스가 에셋 개수를 벗어나도 화면이 깨지지 않게
   const avatarSource =
     profileImages[shown.avatarIdx] ?? profileImages[0];
-  const campusColor = account
-    ? CampusColor[account.campus as keyof typeof CampusColor]
+  const campusColor = info.campus
+    ? CampusColor[info.campus as keyof typeof CampusColor]
     : undefined;
 
   if (isLoading) {
     return (
-      <Screen>
+      <Screen tone="grouped">
         <ScreenHeader title="마이" />
         <View style={styles.loading}>
           <ActivityIndicator color={Palette.brand} />
@@ -180,7 +198,7 @@ export default function ProfileTab() {
   }
 
   return (
-    <Screen>
+    <Screen tone="grouped">
       <ScreenHeader title="마이" />
 
       <KeyboardAwareScrollView
@@ -215,7 +233,7 @@ export default function ProfileTab() {
                 onChangeText={(text) =>
                   setDraft((prev) => ({ ...prev, nickname: text }))
                 }
-                placeholder={account?.name ?? "닉네임을 입력하세요"}
+                placeholder={info.name ?? "닉네임을 입력하세요"}
                 maxLength={NICKNAME_MAX}
               />
 
@@ -291,11 +309,11 @@ export default function ProfileTab() {
               </Text>
 
               <View style={styles.summaryMetaRow}>
-                {!!account && (
-                  <Badge label={`${account.campus} 캠퍼스`} colors={campusColor} />
+                {!!info.campus && (
+                  <Badge label={`${info.campus} 캠퍼스`} colors={campusColor} />
                 )}
                 {!!shown.mbti && <Badge label={shown.mbti} tone="brand" />}
-                {!!account && <Text style={styles.major}>{account.dept}</Text>}
+                {!!info.dept && <Text style={styles.major}>{info.dept}</Text>}
               </View>
 
               <PressScale
@@ -331,17 +349,23 @@ export default function ProfileTab() {
             변경이 필요하면 학생증 재인증을 진행해주세요.
           </Text>
 
-          {account ? (
+          {hasInfo ? (
             <View style={styles.infoList}>
-              <InfoRow label="이름" value={account.name} />
-              <InfoRow
-                label="성별"
-                value={account.gender === "M" ? "남성" : "여성"}
-              />
-              <InfoRow label="캠퍼스" value={`${account.campus}캠퍼스`} />
-              <InfoRow label="학과" value={account.dept} />
-              <InfoRow label="학교 이메일" value={account.email} />
-              <InfoRow label="아이디" value={account.id} />
+              {!!info.name && <InfoRow label="이름" value={info.name} />}
+              {!!info.gender && (
+                <InfoRow
+                  label="성별"
+                  value={info.gender === "M" ? "남성" : "여성"}
+                />
+              )}
+              {!!info.campus && (
+                <InfoRow label="캠퍼스" value={`${info.campus}캠퍼스`} />
+              )}
+              {!!info.dept && <InfoRow label="학과" value={info.dept} />}
+              {!!info.email && (
+                <InfoRow label="학교 이메일" value={info.email} />
+              )}
+              {!!info.userId && <InfoRow label="아이디" value={info.userId} />}
             </View>
           ) : (
             <Text style={styles.infoEmpty}>
@@ -365,7 +389,7 @@ export default function ProfileTab() {
                 }
                 style={({ pressed }) => [
                   styles.menuRow,
-                  pressed && { backgroundColor: Palette.gray50 },
+                  pressed && { backgroundColor: Palette.gray100 },
                 ]}
               >
                 <Ionicons name={item.icon} size={22} color={Palette.gray600} />
@@ -386,7 +410,7 @@ export default function ProfileTab() {
           onPress={handleLogout}
           style={({ pressed }) => [
             styles.logoutRow,
-            pressed && { backgroundColor: Palette.gray50 },
+            pressed && { backgroundColor: Palette.red },
           ]}
         >
           <Text style={styles.logoutText}>로그아웃</Text>
@@ -457,11 +481,13 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 const styles = StyleSheet.create({
   loading: { flex: 1, alignItems: "center", justifyContent: "center" },
 
+  // 좌우로 꽉 찬 흰 블록. 블록끼리는 SectionGap 회색 띠로 끊는다.
   profileSection: {
     alignItems: "center",
     paddingHorizontal: Spacing.screen,
-    paddingTop: Spacing.sm,
-    paddingBottom: Spacing.xxl,
+    paddingTop: Spacing.xl,
+    paddingBottom: Spacing.xl,
+    backgroundColor: Palette.white,
   },
   avatarWrap: { position: "relative", marginBottom: Spacing.lg },
   avatar: {
@@ -491,7 +517,7 @@ const styles = StyleSheet.create({
     marginTop: 6,
     textAlign: "center",
   },
-  bioEmpty: { color: Palette.gray400 },
+  bioEmpty: { color: Palette.gray500 },
   summaryMetaRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -521,7 +547,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
     letterSpacing: -0.2,
-    color: Palette.gray500,
+    color: Palette.gray600,
     marginBottom: Spacing.sm,
   },
   bioInput: {
@@ -531,14 +557,14 @@ const styles = StyleSheet.create({
   },
   counter: {
     ...Typo.caption,
-    color: Palette.gray400,
+    color: Palette.gray500,
     alignSelf: "flex-end",
     marginTop: -12,
     marginBottom: Spacing.lg,
   },
   helperText: {
     ...Typo.caption,
-    color: Palette.gray400,
+    color: Palette.gray600,
     marginBottom: Spacing.xl,
   },
 
@@ -580,13 +606,12 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "600",
     letterSpacing: -0.3,
-    color: Palette.gray500,
+    color: Palette.gray600,
   },
 
   infoSection: {
-    paddingHorizontal: Spacing.screen,
-    paddingTop: Spacing.xl,
-    paddingBottom: Spacing.lg,
+    padding: Spacing.screen,
+    backgroundColor: Palette.white,
   },
   infoHeader: {
     flexDirection: "row",
@@ -602,7 +627,7 @@ const styles = StyleSheet.create({
   infoList: {
     marginTop: Spacing.lg,
     borderRadius: Radius.md,
-    backgroundColor: Palette.gray50,
+    backgroundColor: Palette.gray100,
     paddingHorizontal: Spacing.lg,
   },
   infoRow: {
@@ -616,7 +641,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
     letterSpacing: -0.3,
-    color: Palette.gray500,
+    color: Palette.gray600,
   },
   infoValue: {
     flex: 1,
@@ -630,7 +655,10 @@ const styles = StyleSheet.create({
     marginTop: Spacing.lg,
   },
 
-  menuSection: { paddingVertical: Spacing.xs },
+  menuSection: {
+    paddingVertical: Spacing.xs,
+    backgroundColor: Palette.white,
+  },
   menuRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -647,17 +675,18 @@ const styles = StyleSheet.create({
   },
 
   logoutRow: {
-    paddingHorizontal: Spacing.screen,
     paddingVertical: Spacing.lg,
+    alignItems: "center",
+    backgroundColor: Palette.white,
   },
   logoutText: {
     fontSize: 15,
-    fontWeight: "600",
+    fontWeight: "700",
     letterSpacing: -0.3,
-    color: Palette.gray500,
+    color: Palette.gray600,
   },
 
-  sheetBackdrop: { flex: 1, backgroundColor: "rgba(25,31,40,0.45)" },
+  sheetBackdrop: { flex: 1, backgroundColor: "rgba(11,18,32,0.5)" },
   sheet: {
     backgroundColor: Palette.white,
     borderTopLeftRadius: Radius.xxl,
@@ -671,7 +700,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 4,
     borderRadius: Radius.full,
-    backgroundColor: Palette.gray200,
+    backgroundColor: Palette.gray300,
     marginBottom: Spacing.xl,
   },
   sheetTitle: Typo.title,

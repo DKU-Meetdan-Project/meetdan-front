@@ -9,18 +9,19 @@ import {
   Text,
   TouchableOpacity,
   View,
-  ActivityIndicator,
 } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
-import AsyncStorage from "@react-native-async-storage/async-storage"; // ✅ 직접 import
 
 import { InputBox } from "../components/InputBox";
 import { MainButton } from "@/components/MainButton";
 import { API } from "@/api/client";
-import * as AuthService from "@/utils/auth";
+import { useStore } from "@/store/useStore";
+
+import { Palette, Spacing } from "@/constants/theme";
 
 export default function Login() {
   const router = useRouter();
+  const setCurrentUser = useStore((state) => state.setCurrentUser);
 
   const [id, setId] = useState("");
   const [password, setPassword] = useState("");
@@ -40,47 +41,19 @@ export default function Login() {
     try {
       setIsLoading(true);
 
-      // 2. 회원가입 시 저장해둔 아이디/비밀번호와 대조
-      const credentials = await AuthService.getAccount();
-      if (!credentials) {
-        Alert.alert(
-          "알림",
-          "가입된 계정이 없습니다. 먼저 회원가입을 진행해주세요.",
-        );
-        return;
-      }
-      if (credentials.id !== id || credentials.password !== password) {
-        Alert.alert("로그인 실패", "아이디 또는 비밀번호가 일치하지 않습니다.");
-        return;
-      }
+      // 2. 아이디 → 이메일 해석 후 Supabase 로그인까지 API.login 이 처리한다.
+      //    세션은 supabase-js 가 AsyncStorage 에 알아서 저장·갱신한다.
+      const result = await API.login(id.trim(), password);
 
-      console.log(`🚀 [로그인 시도] ID: ${id}`);
-
-      // 3. API 호출
-      const result = await API.login("test@dankook.ac.kr"); // 테스트용 하드코딩
-      console.log("📥 [API 응답]", JSON.stringify(result, null, 2));
-
-      if (result.code === 200) {
-        // 4. 토큰 추출 (구조 안전하게 확인)
-        const token = result.data?.accessToken;
-
-        if (!token) {
-          console.error("❌ 토큰이 없습니다! 응답 구조를 확인하세요.");
-          Alert.alert("오류", "서버 응답에 토큰이 없습니다.");
-          return;
-        }
-
-        console.log("✅ 토큰 발견:", token);
-
-        // 5. [핵심] 여기서 직접 저장 (AuthService 제거)
-        await AsyncStorage.setItem("user_auth_token", token);
-        console.log("💾 토큰 저장 완료! 메인으로 이동합니다.");
-
-        // 6. 강제 이동
-        router.replace("/(tabs)");
-      } else {
+      if (result.code !== 200 || !result.data) {
         Alert.alert("로그인 실패", result.message || "다시 시도해주세요.");
+        return;
       }
+
+      // 3. 내 정보를 전역 상태에 올려둔다 (프로필·팀 생성 화면이 이 값을 쓴다)
+      setCurrentUser(result.data);
+
+      router.replace("/(tabs)");
     } catch (e) {
       console.error("❌ 로그인 에러:", e);
       Alert.alert("오류", "로그인 중 문제가 발생했습니다.");
@@ -131,7 +104,7 @@ export default function Login() {
           onPress={() => router.push("/signupScreen")}
           style={{ marginTop: 20, alignSelf: "center" }}
         >
-          <Text style={{ color: "#999" }}>회원가입</Text>
+          <Text style={styles.signupLink}>회원가입</Text>
         </TouchableOpacity>
       </View>
     </KeyboardAwareScrollView>
@@ -141,25 +114,34 @@ export default function Login() {
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: Palette.white,
   },
   container: {
     flexGrow: 1,
     justifyContent: "center",
-    paddingHorizontal: 30,
+    paddingHorizontal: Spacing.xxxl,
   },
   formArea: {
     width: "100%",
   },
   title: {
-    fontSize: 30,
-    fontWeight: "bold",
-    color: "#333",
+    fontSize: 28,
+    fontWeight: "800",
+    letterSpacing: -0.8,
+    color: Palette.gray900,
     marginBottom: 5,
   },
+  signupLink: {
+    fontSize: 15,
+    fontWeight: "700",
+    letterSpacing: -0.3,
+    color: Palette.brand,
+  },
   subtitle: {
-    fontSize: 16,
-    color: "#888",
+    fontSize: 15,
+    fontWeight: "500",
+    letterSpacing: -0.3,
+    color: Palette.gray600,
     marginBottom: 40,
   },
 });
