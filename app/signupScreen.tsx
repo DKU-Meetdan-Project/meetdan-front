@@ -24,6 +24,7 @@ import {
 } from "@/constants/departments";
 import { Colors, Palette } from "@/constants/theme";
 import { useStore } from "@/store/useStore";
+import { assertClean } from "@/utils/profanity";
 import { InputBox } from "../components/InputBox";
 import { MainButton } from "../components/MainButton";
 
@@ -239,6 +240,7 @@ export default function SignupScreen() {
         Alert.alert("알림", "이름을 입력해주세요.");
         return;
       }
+      if (!assertClean({ 이름: name })) return;
       setStep(1);
       return;
     }
@@ -303,6 +305,11 @@ export default function SignupScreen() {
         Alert.alert("알림", "비밀번호가 일치하지 않아요.");
         return;
       }
+
+      // 아이디만 본다. 비밀번호는 아무에게도 보이지 않는 값이라 거를 이유가 없고,
+      // 가려진 칸에서 이유 없이 막히면 사용자는 무엇이 틀렸는지 알 수 없다.
+      // 중복 확인(네트워크)보다 먼저 두어 헛왕복을 아낀다.
+      if (!assertClean({ 아이디: userId })) return;
 
       // 아이디 중복은 여기서 걸러낸다. 마지막 단계에서 터지면
       // 이메일 인증까지 다 해놓고 계정 정보 단계로 되돌아가야 해서 사용자가 화난다.

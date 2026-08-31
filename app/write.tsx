@@ -17,6 +17,7 @@ import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view
 import { API } from "@/api/client";
 import { Screen } from "@/components/ui/screen";
 import { Palette, Radius, Spacing, Typo } from "@/constants/theme";
+import { assertClean } from "@/utils/profanity";
 import { useStore } from "../store/useStore";
 
 // post/[id].tsx 상세 화면이 태그를 그대로 보여주므로, 여기서 적은 값이 곧 표시될 내용이다.
@@ -56,6 +57,13 @@ export default function Write() {
     const incoming = tagDraft.split(",").map(normalizeTag).filter(Boolean);
     if (incoming.length === 0) return;
 
+    // 태그는 칩으로 굳어버리면 어디가 문제였는지 알기 어려워지므로 넣기 전에 거른다.
+    // 한 덩어리로 이어 붙여 검사하면 안 된다 — 필터가 공백을 지우고 보기 때문에
+    // 멀쩡한 태그 둘이 맞붙어 금칙어가 되어버린다. 하나씩 따로 본다.
+    for (const tag of incoming) {
+      if (!assertClean({ "우리 팀 태그": tag })) return;
+    }
+
     const next = [...tags];
     let dropped = false;
     for (const tag of incoming) {
@@ -94,6 +102,9 @@ export default function Write() {
       Alert.alert("잠깐!", "우리 팀을 표현할 태그를 1개 이상 적어주세요.");
       return;
     }
+
+    // 태그는 addTag 에서 이미 걸렀다. 여기서는 자유 입력 두 칸만 본다.
+    if (!assertClean({ 제목: title, "우리 팀 매력 어필": content })) return;
 
     // 팀의 학과·성별은 서버가 내 프로필에서 채우므로, 로그인 상태만 확인한다
     if (!currentUser) {

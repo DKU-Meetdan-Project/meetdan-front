@@ -35,6 +35,7 @@ import {
   Typo,
 } from "@/constants/theme";
 import { useStore } from "@/store/useStore";
+import { assertClean } from "@/utils/profanity";
 import { API } from "@/api/client";
 import type { ProfilePatch } from "@/api/client";
 import { profileImages } from "@/constants/avatars";
@@ -120,6 +121,9 @@ export default function ProfileTab() {
       Alert.alert("알림", `닉네임은 ${NICKNAME_MAX}자까지 입력할 수 있어요.`);
       return;
     }
+
+    // 닉네임과 소개는 상대 팀에게 그대로 보이는 값이다
+    if (!assertClean({ 닉네임: nickname, "한 줄 소개": bio })) return;
 
     try {
       setIsSaving(true);

@@ -16,6 +16,7 @@ import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view
 import { API } from "@/api/client";
 import { Screen } from "@/components/ui/screen";
 import { Palette, Radius, Spacing, Typo } from "@/constants/theme";
+import { assertClean } from "@/utils/profanity";
 import { useStore } from "../../store/useStore"; // ✅ 경로 확인
 
 export default function EditTeam() {
@@ -61,6 +62,8 @@ export default function EditTeam() {
       Alert.alert("잠깐!", "내용을 모두 입력해주세요.");
       return;
     }
+
+    if (!assertClean({ 제목: title, "우리 팀 어필": content })) return;
 
     // 이미 들어온 팀원 수보다 적게는 줄일 수 없다
     // (서버도 filled_count <= capacity 제약으로 한 번 더 막는다)
